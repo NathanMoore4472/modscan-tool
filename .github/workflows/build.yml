@@ -136,14 +136,29 @@ jobs:
         name: ModScan-Tool-Linux
         path: dist/ModScan-Tool-Linux.tar.gz
 
-    # Upload to release if this is a release event
-    - name: Upload to Release
-      if: github.event_name == 'release'
+    # Upload macOS to release
+    - name: Upload macOS Release
+      if: github.event_name == 'release' && matrix.os == 'macos-latest'
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          dist/ModScan-Tool-macOS.dmg
-          dist/ModScan-Tool-Windows.exe
-          dist/ModScan-Tool-Linux.tar.gz
+        files: dist/ModScan-Tool-macOS.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Upload Windows to release
+    - name: Upload Windows Release
+      if: github.event_name == 'release' && matrix.os == 'windows-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/ModScan-Tool-Windows.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # Upload Linux to release
+    - name: Upload Linux Release
+      if: github.event_name == 'release' && matrix.os == 'ubuntu-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/ModScan-Tool-Linux.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
