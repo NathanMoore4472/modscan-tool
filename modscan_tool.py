@@ -34,8 +34,8 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        pymodbus_version = getattr(pymodbus, '__version__', 'unknown')
-        self.setWindowTitle(f"Modbus Register Reader (pymodbus {pymodbus_version})")
+        self.app_version = "1.0.0"
+        self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 900, 700)
 
         self.scanning = False
@@ -50,6 +50,7 @@ class ModbusScannerGUI(QMainWindow):
         self.signals.update_table.connect(self.populate_table)
 
         self.init_ui()
+        self.create_menu_bar()
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -267,6 +268,63 @@ class ModbusScannerGUI(QMainWindow):
 
         results_group.setLayout(results_layout)
         layout.addWidget(results_group)
+
+    def create_menu_bar(self):
+        """Create the menu bar with Help menu"""
+        menubar = self.menuBar()
+
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+
+        # About action
+        about_action = help_menu.addAction("About ModScan Tool")
+        about_action.triggered.connect(self.show_about_dialog)
+
+    def show_about_dialog(self):
+        """Show the About dialog with version and info"""
+        pymodbus_version = getattr(pymodbus, '__version__', 'unknown')
+
+        try:
+            from PyQt6 import QtCore
+            pyqt_version = QtCore.PYQT_VERSION_STR
+        except:
+            pyqt_version = 'unknown'
+
+        about_text = f"""
+<h2>ModScan Tool</h2>
+<p><b>Version:</b> {self.app_version}</p>
+
+<h3>About</h3>
+<p>A modern, cross-platform GUI application for reading and monitoring Modbus TCP devices.</p>
+
+<h3>Dependencies</h3>
+<ul>
+<li><b>pymodbus:</b> {pymodbus_version}</li>
+<li><b>PyQt6:</b> {pyqt_version}</li>
+<li><b>Python:</b> {sys.version.split()[0]}</li>
+</ul>
+
+<h3>Links</h3>
+<p>🔗 <a href="https://github.com/NathanMoore4472/modscan-tool">GitHub Repository</a></p>
+<p>🐛 <a href="https://github.com/NathanMoore4472/modscan-tool/issues">Report Issues</a></p>
+
+<h3>License</h3>
+<p>GNU General Public License v3.0</p>
+
+<h3>Author</h3>
+<p>Nathan Moore</p>
+
+<p style="margin-top: 20px; font-size: small; color: gray;">
+Built with Python, PyQt6, and pymodbus
+</p>
+        """
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("About ModScan Tool")
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setText(about_text)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
     def log_message(self, message, tag):
         """Display a log message in the info label"""
