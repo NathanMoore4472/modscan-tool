@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QTextCursor, QColor, QTextCharFormat
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
+import pymodbus
 
 
 class WorkerSignals(QObject):
@@ -33,7 +34,8 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Modbus Register Reader")
+        pymodbus_version = getattr(pymodbus, '__version__', 'unknown')
+        self.setWindowTitle(f"Modbus Register Reader (pymodbus {pymodbus_version})")
         self.setGeometry(100, 100, 900, 700)
 
         self.scanning = False
