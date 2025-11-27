@@ -671,26 +671,30 @@ class ModbusScannerGUI(QMainWindow):
                 return result
 
             try:
-                # Try with 'slave' parameter first (pymodbus 3.x compatibility)
-                try:
-                    if register_type == 'holding':
-                        response = client.read_holding_registers(start_reg, count=count, slave=unit_id)
-                    elif register_type == 'input':
-                        response = client.read_input_registers(start_reg, count=count, slave=unit_id)
-                    elif register_type == 'coils':
-                        response = client.read_coils(start_reg, count=count, slave=unit_id)
-                    else:  # discrete inputs
-                        response = client.read_discrete_inputs(start_reg, count=count, slave=unit_id)
-                except TypeError:
-                    # Fallback to 'unit' parameter if 'slave' doesn't work
-                    if register_type == 'holding':
-                        response = client.read_holding_registers(start_reg, count=count, unit=unit_id)
-                    elif register_type == 'input':
-                        response = client.read_input_registers(start_reg, count=count, unit=unit_id)
-                    elif register_type == 'coils':
-                        response = client.read_coils(start_reg, count=count, unit=unit_id)
-                    else:  # discrete inputs
-                        response = client.read_discrete_inputs(start_reg, count=count, unit=unit_id)
+                # Try different parameter names for different pymodbus versions
+                response = None
+                for param_style in [('slave', unit_id), ('unit', unit_id), (None, None)]:
+                    try:
+                        param_name, param_value = param_style
+                        if param_name:
+                            kwargs = {'count': count, param_name: param_value}
+                        else:
+                            kwargs = {'count': count}
+
+                        if register_type == 'holding':
+                            response = client.read_holding_registers(start_reg, **kwargs)
+                        elif register_type == 'input':
+                            response = client.read_input_registers(start_reg, **kwargs)
+                        elif register_type == 'coils':
+                            response = client.read_coils(start_reg, **kwargs)
+                        else:  # discrete inputs
+                            response = client.read_discrete_inputs(start_reg, **kwargs)
+                        break  # If successful, exit the loop
+                    except TypeError:
+                        continue  # Try next parameter style
+
+                if response is None:
+                    raise Exception("Could not call read function with any known parameter style")
 
                 if response.isError():
                     result['error'] = f"Modbus error: {response}"
@@ -728,26 +732,31 @@ class ModbusScannerGUI(QMainWindow):
             for i in range(count):
                 reg_addr = start_reg + i
                 try:
-                    # Try with 'slave' parameter first (pymodbus 3.x compatibility)
-                    try:
-                        if register_type == 'holding':
-                            response = client.read_holding_registers(reg_addr, count=1, slave=unit_id)
-                        elif register_type == 'input':
-                            response = client.read_input_registers(reg_addr, count=1, slave=unit_id)
-                        elif register_type == 'coils':
-                            response = client.read_coils(reg_addr, count=1, slave=unit_id)
-                        else:  # discrete inputs
-                            response = client.read_discrete_inputs(reg_addr, count=1, slave=unit_id)
-                    except TypeError:
-                        # Fallback to 'unit' parameter if 'slave' doesn't work
-                        if register_type == 'holding':
-                            response = client.read_holding_registers(reg_addr, count=1, unit=unit_id)
-                        elif register_type == 'input':
-                            response = client.read_input_registers(reg_addr, count=1, unit=unit_id)
-                        elif register_type == 'coils':
-                            response = client.read_coils(reg_addr, count=1, unit=unit_id)
-                        else:  # discrete inputs
-                            response = client.read_discrete_inputs(reg_addr, count=1, unit=unit_id)
+                    # Try different parameter names for different pymodbus versions
+                    response = None
+                    for param_style in [('slave', unit_id), ('unit', unit_id), (None, None)]:
+                        try:
+                            param_name, param_value = param_style
+                            if param_name:
+                                kwargs = {'count': 1, param_name: param_value}
+                            else:
+                                kwargs = {'count': 1}
+
+                            if register_type == 'holding':
+                                response = client.read_holding_registers(reg_addr, **kwargs)
+                            elif register_type == 'input':
+                                response = client.read_input_registers(reg_addr, **kwargs)
+                            elif register_type == 'coils':
+                                response = client.read_coils(reg_addr, **kwargs)
+                            else:  # discrete inputs
+                                response = client.read_discrete_inputs(reg_addr, **kwargs)
+                            break  # If successful, exit the loop
+                        except TypeError:
+                            continue  # Try next parameter style
+
+                    if response is None:
+                        results.append({'error': 'Could not call read function with any known parameter style'})
+                        continue
 
                     if response.isError():
                         results.append({'error': f"Modbus error: {response}"})
