@@ -671,14 +671,26 @@ class ModbusScannerGUI(QMainWindow):
                 return result
 
             try:
-                if register_type == 'holding':
-                    response = client.read_holding_registers(start_reg, count, unit_id)
-                elif register_type == 'input':
-                    response = client.read_input_registers(start_reg, count, unit_id)
-                elif register_type == 'coils':
-                    response = client.read_coils(start_reg, count, unit_id)
-                else:  # discrete inputs
-                    response = client.read_discrete_inputs(start_reg, count, unit_id)
+                # Try with 'slave' parameter first (pymodbus 3.x compatibility)
+                try:
+                    if register_type == 'holding':
+                        response = client.read_holding_registers(start_reg, count=count, slave=unit_id)
+                    elif register_type == 'input':
+                        response = client.read_input_registers(start_reg, count=count, slave=unit_id)
+                    elif register_type == 'coils':
+                        response = client.read_coils(start_reg, count=count, slave=unit_id)
+                    else:  # discrete inputs
+                        response = client.read_discrete_inputs(start_reg, count=count, slave=unit_id)
+                except TypeError:
+                    # Fallback to 'unit' parameter if 'slave' doesn't work
+                    if register_type == 'holding':
+                        response = client.read_holding_registers(start_reg, count=count, unit=unit_id)
+                    elif register_type == 'input':
+                        response = client.read_input_registers(start_reg, count=count, unit=unit_id)
+                    elif register_type == 'coils':
+                        response = client.read_coils(start_reg, count=count, unit=unit_id)
+                    else:  # discrete inputs
+                        response = client.read_discrete_inputs(start_reg, count=count, unit=unit_id)
 
                 if response.isError():
                     result['error'] = f"Modbus error: {response}"
@@ -716,14 +728,26 @@ class ModbusScannerGUI(QMainWindow):
             for i in range(count):
                 reg_addr = start_reg + i
                 try:
-                    if register_type == 'holding':
-                        response = client.read_holding_registers(reg_addr, 1, unit_id)
-                    elif register_type == 'input':
-                        response = client.read_input_registers(reg_addr, 1, unit_id)
-                    elif register_type == 'coils':
-                        response = client.read_coils(reg_addr, 1, unit_id)
-                    else:  # discrete inputs
-                        response = client.read_discrete_inputs(reg_addr, 1, unit_id)
+                    # Try with 'slave' parameter first (pymodbus 3.x compatibility)
+                    try:
+                        if register_type == 'holding':
+                            response = client.read_holding_registers(reg_addr, count=1, slave=unit_id)
+                        elif register_type == 'input':
+                            response = client.read_input_registers(reg_addr, count=1, slave=unit_id)
+                        elif register_type == 'coils':
+                            response = client.read_coils(reg_addr, count=1, slave=unit_id)
+                        else:  # discrete inputs
+                            response = client.read_discrete_inputs(reg_addr, count=1, slave=unit_id)
+                    except TypeError:
+                        # Fallback to 'unit' parameter if 'slave' doesn't work
+                        if register_type == 'holding':
+                            response = client.read_holding_registers(reg_addr, count=1, unit=unit_id)
+                        elif register_type == 'input':
+                            response = client.read_input_registers(reg_addr, count=1, unit=unit_id)
+                        elif register_type == 'coils':
+                            response = client.read_coils(reg_addr, count=1, unit=unit_id)
+                        else:  # discrete inputs
+                            response = client.read_discrete_inputs(reg_addr, count=1, unit=unit_id)
 
                     if response.isError():
                         results.append({'error': f"Modbus error: {response}"})
