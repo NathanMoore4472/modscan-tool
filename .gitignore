@@ -1,0 +1,39 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Results exports
+modscan_results_*.txt
+modbus_registers_*.csv
+
+# Build artifacts
+build/
+dist/
+*.spec
+*.icns
+*.ico
+icon.iconset/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+.claude_history
+*.claude
