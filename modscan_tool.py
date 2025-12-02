@@ -20,6 +20,7 @@ from PyQt6.QtGui import QTextCursor, QColor, QTextCharFormat
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 import pymodbus
+from opf_parser import parse_opf_file
 
 
 class WorkerSignals(QObject):
@@ -41,6 +42,8 @@ class ModbusScannerGUI(QMainWindow):
         self.scanning = False
         self.scan_thread = None
         self.signals = WorkerSignals()
+        self.tag_mappings = {}  # Store tag mappings from imported .opf files
+        self.tags_imported = False  # Track if tags have been imported
 
         # Connect signals
         self.signals.log.connect(self.log_message)
@@ -51,6 +54,7 @@ class ModbusScannerGUI(QMainWindow):
 
         self.init_ui()
         self.create_menu_bar()
+        self.update_table_columns()  # Set initial column visibility
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -234,7 +238,7 @@ class ModbusScannerGUI(QMainWindow):
 
         self.filter_column_combo = QComboBox()
         self.filter_column_combo.addItems([
-            "All Columns", "Address", "Hex", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
+            "All Columns", "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
         ])
         self.filter_column_combo.setMaximumWidth(120)
         filter_layout.addWidget(self.filter_column_combo)
@@ -254,9 +258,9 @@ class ModbusScannerGUI(QMainWindow):
 
         # Create table
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(8)
+        self.results_table.setColumnCount(10)
         self.results_table.setHorizontalHeaderLabels([
-            "Address", "Hex", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
+            "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
         ])
 
         # Make table fill available space and resize columns to content
@@ -270,8 +274,16 @@ class ModbusScannerGUI(QMainWindow):
         layout.addWidget(results_group)
 
     def create_menu_bar(self):
-        """Create the menu bar with Help menu"""
+        """Create the menu bar with File and Help menus"""
         menubar = self.menuBar()
+
+        # File menu
+        file_menu = menubar.addMenu("File")
+
+        # Import action
+        import_action = file_menu.addAction("Import from KEPServerEX...")
+        import_action.triggered.connect(self.import_opf)
+        import_action.setShortcut("Ctrl+I")
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -279,6 +291,15 @@ class ModbusScannerGUI(QMainWindow):
         # About action
         about_action = help_menu.addAction("About ModScan Tool")
         about_action.triggered.connect(self.show_about_dialog)
+
+    def update_table_columns(self):
+        """Update table columns based on whether tags are imported"""
+        if self.tags_imported:
+            # Show Tag Name column
+            self.results_table.setColumnHidden(1, False)
+        else:
+            # Hide Tag Name column
+            self.results_table.setColumnHidden(1, True)
 
     def show_about_dialog(self):
         """Show the About dialog with version and info"""
@@ -592,7 +613,6 @@ Built with Python, PyQt6, and pymodbus
 
     def populate_table(self, registers, start_address):
         """Populate the table with register values and interpretations"""
-        self.results_table.setRowCount(len(registers))
 
         # Get options
         reverse_byte = self.reverse_byte_order_check.isChecked()
@@ -606,115 +626,199 @@ Built with Python, PyQt6, and pymodbus
             if first_valid is not None and isinstance(first_valid, bool):
                 is_bit_type = True
 
+        # Check if we need to expand registers into bit rows
+        bit_expansion_needed = False
+        if self.tag_mappings:
+            for key in self.tag_mappings.keys():
+                if key[1] is not None:  # key is (address, bit)
+                    bit_expansion_needed = True
+                    break
+
+        # Build table rows
+        table_rows = []
+
         for i, value in enumerate(registers):
             # Calculate display address
             addr = start_address + i
             if not zero_based:
                 addr += 1  # Display as 1-based
 
-            row = i
-
-            # Check if this is an error entry (dict with 'error' key)
+            # Check if this is an error entry
             if isinstance(value, dict) and 'error' in value:
-                # Display error in table
-                self.results_table.setItem(row, 0, QTableWidgetItem(str(addr)))
-                error_msg = value['error']
-                for col in range(1, 8):
-                    item = QTableWidgetItem("ERROR")
-                    item.setToolTip(error_msg)  # Show full error on hover
-                    self.results_table.setItem(row, col, item)
+                table_rows.append({
+                    'address': str(addr),
+                    'tag_name': 'ERROR',
+                    'error': value['error']
+                })
                 continue
 
             # Handle bit values (coils/discrete inputs)
             if is_bit_type:
-                self.results_table.setItem(row, 0, QTableWidgetItem(str(addr)))
+                tag_name = self.tag_mappings.get((addr, None), "")
                 bit_val = "1" if value else "0"
-                self.results_table.setItem(row, 1, QTableWidgetItem(bit_val))
-                # Mark other columns as N/A for bit values
-                for col in range(2, 8):
-                    self.results_table.setItem(row, col, QTableWidgetItem("-"))
+                table_rows.append({
+                    'address': str(addr),
+                    'tag_name': tag_name,
+                    'bit_value': bit_val
+                })
                 continue
 
             # Apply byte order reversal if needed
             if reverse_byte:
-                # Swap the bytes within the 16-bit word
                 value = ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
 
-            # Address
-            self.results_table.setItem(row, 0, QTableWidgetItem(str(addr)))
+            # Check if we should expand this register into bit rows
+            if bit_expansion_needed:
+                # Find all bit tags for this register
+                bit_tags_for_register = []
+                for bit in range(16):
+                    tag = self.tag_mappings.get((addr, bit))
+                    if tag:
+                        bit_tags_for_register.append((bit, tag))
 
-            # Hex value
-            hex_val = f"0x{value:04X}"
-            self.results_table.setItem(row, 1, QTableWidgetItem(hex_val))
-
-            # Uint16
-            uint16_val = value
-            self.results_table.setItem(row, 2, QTableWidgetItem(str(uint16_val)))
-
-            # Int16 (signed)
-            int16_val = value if value < 32768 else value - 65536
-            self.results_table.setItem(row, 3, QTableWidgetItem(str(int16_val)))
-
-            # Uint32 (combine with next register if available)
-            if i + 1 < len(registers):
-                # Get next register value
-                next_value = registers[i + 1]
-
-                # Check if next value is an error
-                if isinstance(next_value, dict) and 'error' in next_value:
-                    # Can't calculate 32-bit values if next register is an error
-                    self.results_table.setItem(row, 4, QTableWidgetItem("N/A"))
-                    self.results_table.setItem(row, 5, QTableWidgetItem("N/A"))
-                    self.results_table.setItem(row, 6, QTableWidgetItem("N/A"))
+                if bit_tags_for_register:
+                    # Create a row for each bit with a tag
+                    for bit, tag in bit_tags_for_register:
+                        bit_value = (value >> bit) & 1
+                        table_rows.append({
+                            'address': f"{addr}.{bit}",
+                            'tag_name': tag,
+                            'bit': bit,
+                            'bit_value': str(bit_value),
+                            'register_value': value,
+                            'addr_num': addr,
+                            'index': i
+                        })
                 else:
-                    # Next value is valid, proceed with 32-bit calculations
+                    # No bit tags, show as whole register
+                    tag_name = self.tag_mappings.get((addr, None), "")
+                    table_rows.append({
+                        'address': str(addr),
+                        'tag_name': tag_name,
+                        'value': value,
+                        'addr_num': addr,
+                        'index': i
+                    })
+            else:
+                # Normal register display
+                tag_name = self.tag_mappings.get((addr, None), "")
+                table_rows.append({
+                    'address': str(addr),
+                    'tag_name': tag_name,
+                    'value': value,
+                    'addr_num': addr,
+                    'index': i
+                })
+
+        # Set table row count
+        self.results_table.setRowCount(len(table_rows))
+
+        # Populate table
+        for row_idx, row_data in enumerate(table_rows):
+            # Address column
+            self.results_table.setItem(row_idx, 0, QTableWidgetItem(row_data['address']))
+
+            # Tag Name column
+            self.results_table.setItem(row_idx, 1, QTableWidgetItem(row_data.get('tag_name', '')))
+
+            # Handle error rows
+            if 'error' in row_data:
+                for col in range(2, 10):
+                    item = QTableWidgetItem("ERROR")
+                    item.setToolTip(row_data['error'])
+                    self.results_table.setItem(row_idx, col, item)
+                continue
+
+            # Handle bit expansion rows
+            if 'bit_value' in row_data and 'bit' in row_data:
+                # Bit value in Hex column
+                self.results_table.setItem(row_idx, 2, QTableWidgetItem(row_data['bit_value']))
+                # Show register value in Binary and Uint16 columns for context
+                if 'register_value' in row_data:
+                    reg_val = row_data['register_value']
+                    binary_val = format(reg_val, '016b')
+                    self.results_table.setItem(row_idx, 3, QTableWidgetItem(binary_val))
+                    self.results_table.setItem(row_idx, 4, QTableWidgetItem(f"0x{reg_val:04X}"))
+                # Mark other columns as N/A
+                for col in range(5, 10):
+                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
+                continue
+
+            # Handle coils/discrete (already bit values)
+            if 'bit_value' in row_data and 'bit' not in row_data:
+                self.results_table.setItem(row_idx, 2, QTableWidgetItem(row_data['bit_value']))
+                for col in range(3, 10):
+                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
+                continue
+
+            # Normal register row
+            if 'value' not in row_data:
+                continue
+
+            value = row_data['value']
+            i = row_data.get('index', 0)
+
+            # Hex value (column 2)
+            hex_val = f"0x{value:04X}"
+            self.results_table.setItem(row_idx, 2, QTableWidgetItem(hex_val))
+
+            # Binary value (column 3)
+            binary_val = format(value, '016b')
+            self.results_table.setItem(row_idx, 3, QTableWidgetItem(binary_val))
+
+            # Uint16 (column 4)
+            self.results_table.setItem(row_idx, 4, QTableWidgetItem(str(value)))
+
+            # Int16 (column 5)
+            int16_val = value if value < 32768 else value - 65536
+            self.results_table.setItem(row_idx, 5, QTableWidgetItem(str(int16_val)))
+
+            # Uint32, Int32, Float32 (columns 6-8)
+            if i + 1 < len(registers):
+                next_value = registers[i + 1]
+                if isinstance(next_value, dict) and 'error' in next_value:
+                    for col in range(6, 9):
+                        self.results_table.setItem(row_idx, col, QTableWidgetItem("N/A"))
+                else:
                     if reverse_byte:
-                        # Swap bytes in the second register too
                         next_value = ((next_value & 0xFF) << 8) | ((next_value >> 8) & 0xFF)
 
-                    # Combine words (apply word order)
                     if reverse_word:
                         uint32_val = (next_value << 16) | value
                     else:
                         uint32_val = (value << 16) | next_value
 
-                    self.results_table.setItem(row, 4, QTableWidgetItem(str(uint32_val)))
+                    self.results_table.setItem(row_idx, 6, QTableWidgetItem(str(uint32_val)))
 
-                    # Int32 (signed 32-bit)
                     int32_val = uint32_val if uint32_val < 2147483648 else uint32_val - 4294967296
-                    self.results_table.setItem(row, 5, QTableWidgetItem(str(int32_val)))
+                    self.results_table.setItem(row_idx, 7, QTableWidgetItem(str(int32_val)))
 
-                    # Float32
                     try:
-                        # Pack as two 16-bit unsigned ints, then unpack as float
                         if reverse_word:
                             bytes_data = struct.pack('>HH', next_value, value)
                         else:
                             bytes_data = struct.pack('>HH', value, next_value)
                         float_val = struct.unpack('>f', bytes_data)[0]
-                        self.results_table.setItem(row, 6, QTableWidgetItem(f"{float_val:.6f}"))
+                        self.results_table.setItem(row_idx, 8, QTableWidgetItem(f"{float_val:.6f}"))
                     except:
-                        self.results_table.setItem(row, 6, QTableWidgetItem("N/A"))
+                        self.results_table.setItem(row_idx, 8, QTableWidgetItem("N/A"))
             else:
-                self.results_table.setItem(row, 4, QTableWidgetItem("-"))
-                self.results_table.setItem(row, 5, QTableWidgetItem("-"))
-                self.results_table.setItem(row, 6, QTableWidgetItem("-"))
+                for col in range(6, 9):
+                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
 
-            # String (ASCII representation of the 2 bytes)
+            # String (column 9)
             try:
                 high_byte = (value >> 8) & 0xFF
                 low_byte = value & 0xFF
-                # Only show printable ASCII characters
                 chars = []
                 if 32 <= high_byte <= 126:
                     chars.append(chr(high_byte))
                 if 32 <= low_byte <= 126:
                     chars.append(chr(low_byte))
                 string_val = ''.join(chars) if chars else '.'
-                self.results_table.setItem(row, 7, QTableWidgetItem(string_val))
+                self.results_table.setItem(row_idx, 9, QTableWidgetItem(string_val))
             except:
-                self.results_table.setItem(row, 7, QTableWidgetItem('.'))
-
+                self.results_table.setItem(row_idx, 9, QTableWidgetItem('.'))
     def read_registers(self, ip, port, unit_id, timeout, register_type, start_reg, count):
         """Read registers from a Modbus device"""
         result = {
@@ -867,6 +971,77 @@ Built with Python, PyQt6, and pymodbus
             QMessageBox.information(self, "Export", f"Results exported to {filename}")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export results: {str(e)}")
+
+    def import_opf(self):
+        """Import device configuration from KEPServerEX .opf file"""
+        # Open file dialog to select .opf file
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select KEPServerEX Project File",
+            "",
+            "KEPServerEX Files (*.opf);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            # Parse the .opf file
+            self.signals.status.emit("Parsing KEPServerEX file...")
+            config = parse_opf_file(file_path)
+
+            # Populate connection settings
+            if config['ip']:
+                self.ip_entry.setText(config['ip'])
+
+            self.port_entry.setText(str(config['port']))
+            self.unit_entry.setText(str(config['unit_id']))
+
+            # Populate register settings
+            if config['register_count'] > 0:
+                self.start_register_entry.setText(str(config['min_address']))
+                self.register_count_entry.setText(str(config['scan_count']))
+
+            # Set to holding registers by default
+            self.holding_radio.setChecked(True)
+
+            # Store tag mappings for display
+            # Create a lookup dict: (address, bit) -> tag_name
+            self.tag_mappings = {}
+            for tag in config.get('tags', []):
+                key = (tag['address'], tag.get('bit'))
+                self.tag_mappings[key] = tag['tag_name']
+
+            # Update tags imported flag and column visibility
+            if self.tag_mappings:
+                self.tags_imported = True
+                self.update_table_columns()
+
+            # Show summary dialog
+            summary = f"""Successfully imported KEPServerEX configuration:
+
+Connection:
+  IP Address: {config['ip']}
+  Port: {config['port']}
+  Unit ID: {config['unit_id']}
+
+Registers:
+  Total unique registers: {config['register_count']}
+  Register range: {config['min_address']} to {config['max_address']}
+  Scan count: {config['scan_count']}
+
+Tags:
+  Total tags imported: {config.get('tag_count', 0)}
+
+The connection settings have been auto-populated.
+Click 'Read Registers' to start scanning."""
+
+            QMessageBox.information(self, "Import Successful", summary)
+            self.signals.status.emit("KEPServerEX configuration imported successfully")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import KEPServerEX file:\n{str(e)}")
+            self.signals.status.emit("Failed to import configuration")
 
 
 def main():
