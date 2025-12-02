@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QProgressBar, QCheckBox, QGroupBox,
                              QMessageBox, QFileDialog, QRadioButton, QButtonGroup,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QComboBox)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+                             QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
+                             QAbstractItemView, QDialog, QDialogButtonBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QTextCursor, QColor, QTextCharFormat
 from pymodbus.client import ModbusTcpClient
@@ -35,7 +37,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.0.0"
+        self.app_version = "1.1.0"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 900, 700)
 
@@ -44,6 +46,7 @@ class ModbusScannerGUI(QMainWindow):
         self.signals = WorkerSignals()
         self.tag_mappings = {}  # Store tag mappings from imported .opf files
         self.tags_imported = False  # Track if tags have been imported
+        self.auto_expand_bits = False  # Preference for auto-expanding bit rows
 
         # Connect signals
         self.signals.log.connect(self.log_message)
@@ -54,7 +57,6 @@ class ModbusScannerGUI(QMainWindow):
 
         self.init_ui()
         self.create_menu_bar()
-        self.update_table_columns()  # Set initial column visibility
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -256,17 +258,23 @@ class ModbusScannerGUI(QMainWindow):
 
         results_layout.addLayout(filter_layout)
 
-        # Create table
-        self.results_table = QTableWidget()
+        # Create tree widget (replaces table for expandable bit rows)
+        self.results_table = QTreeWidget()
         self.results_table.setColumnCount(10)
-        self.results_table.setHorizontalHeaderLabels([
+        self.results_table.setHeaderLabels([
             "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
         ])
 
-        # Make table fill available space and resize columns to content
-        header = self.results_table.horizontalHeader()
+        # Configure tree widget
+        header = self.results_table.header()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setStretchLastSection(True)
+
+        # Enable editing for Tag Name column
+        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
+
+        # Show Tag Name column by default (user can add tags manually)
+        # No longer hide it - it's always available
 
         results_layout.addWidget(self.results_table)
 
@@ -291,15 +299,6 @@ class ModbusScannerGUI(QMainWindow):
         # About action
         about_action = help_menu.addAction("About ModScan Tool")
         about_action.triggered.connect(self.show_about_dialog)
-
-    def update_table_columns(self):
-        """Update table columns based on whether tags are imported"""
-        if self.tags_imported:
-            # Show Tag Name column
-            self.results_table.setColumnHidden(1, False)
-        else:
-            # Hide Tag Name column
-            self.results_table.setColumnHidden(1, True)
 
     def show_about_dialog(self):
         """Show the About dialog with version and info"""
@@ -371,45 +370,50 @@ Built with Python, PyQt6, and pymodbus
 
     def clear_results(self):
         """Clear the results table"""
-        self.results_table.setRowCount(0)
+        self.results_table.clear()
         self.progress_bar.setValue(0)
         self.info_label.setText("Table cleared.")
 
     def filter_table(self):
-        """Filter table rows based on search criteria"""
+        """Filter tree items based on search criteria"""
         filter_text = self.filter_entry.text().lower()
         column_index = self.filter_column_combo.currentIndex() - 1  # -1 because first item is "All Columns"
 
         if not filter_text:
-            # Show all rows if filter is empty
-            for row in range(self.results_table.rowCount()):
-                self.results_table.setRowHidden(row, False)
+            # Show all items if filter is empty
+            iterator = QTreeWidgetItemIterator(self.results_table)
+            while iterator.value():
+                iterator.value().setHidden(False)
+                iterator += 1
             return
 
-        # Filter rows
-        for row in range(self.results_table.rowCount()):
-            show_row = False
+        # Filter items
+        iterator = QTreeWidgetItemIterator(self.results_table)
+        while iterator.value():
+            item = iterator.value()
+            show_item = False
 
             if column_index == -1:
                 # Search all columns
                 for col in range(self.results_table.columnCount()):
-                    item = self.results_table.item(row, col)
-                    if item and filter_text in item.text().lower():
-                        show_row = True
+                    if filter_text in item.text(col).lower():
+                        show_item = True
                         break
             else:
                 # Search specific column
-                item = self.results_table.item(row, column_index)
-                if item and filter_text in item.text().lower():
-                    show_row = True
+                if filter_text in item.text(column_index).lower():
+                    show_item = True
 
-            self.results_table.setRowHidden(row, not show_row)
+            item.setHidden(not show_item)
+            iterator += 1
 
     def clear_filter(self):
-        """Clear the filter and show all rows"""
+        """Clear the filter and show all items"""
         self.filter_entry.clear()
-        for row in range(self.results_table.rowCount()):
-            self.results_table.setRowHidden(row, False)
+        iterator = QTreeWidgetItemIterator(self.results_table)
+        while iterator.value():
+            iterator.value().setHidden(False)
+            iterator += 1
 
     def validate_inputs(self):
         """Validate user inputs"""
@@ -612,7 +616,7 @@ Built with Python, PyQt6, and pymodbus
             self.signals.finished.emit()
 
     def populate_table(self, registers, start_address):
-        """Populate the table with register values and interpretations"""
+        """Populate the tree widget with register values (with expandable bit rows)"""
 
         # Get options
         reverse_byte = self.reverse_byte_order_check.isChecked()
@@ -626,16 +630,21 @@ Built with Python, PyQt6, and pymodbus
             if first_valid is not None and isinstance(first_valid, bool):
                 is_bit_type = True
 
-        # Check if we need to expand registers into bit rows
-        bit_expansion_needed = False
-        if self.tag_mappings:
-            for key in self.tag_mappings.keys():
-                if key[1] is not None:  # key is (address, bit)
-                    bit_expansion_needed = True
-                    break
+        # Check if this is first population or structure changed
+        needs_rebuild = False
+        if self.results_table.topLevelItemCount() != len(registers):
+            needs_rebuild = True
 
-        # Build table rows
-        table_rows = []
+        # If structure hasn't changed, update in place
+        if not needs_rebuild and self.results_table.topLevelItemCount() > 0:
+            self._update_table_values(registers, start_address, reverse_byte, reverse_word, zero_based, is_bit_type)
+            return
+
+        # Otherwise rebuild the table
+        self.results_table.clear()
+        self.results_table.setHeaderLabels([
+            "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
+        ])
 
         for i, value in enumerate(registers):
             # Calculate display address
@@ -645,141 +654,42 @@ Built with Python, PyQt6, and pymodbus
 
             # Check if this is an error entry
             if isinstance(value, dict) and 'error' in value:
-                table_rows.append({
-                    'address': str(addr),
-                    'tag_name': 'ERROR',
-                    'error': value['error']
-                })
+                item = QTreeWidgetItem([str(addr), "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR"])
+                item.setToolTip(0, value['error'])
+                self.results_table.addTopLevelItem(item)
                 continue
 
             # Handle bit values (coils/discrete inputs)
             if is_bit_type:
                 tag_name = self.tag_mappings.get((addr, None), "")
                 bit_val = "1" if value else "0"
-                table_rows.append({
-                    'address': str(addr),
-                    'tag_name': tag_name,
-                    'bit_value': bit_val
-                })
+                item = QTreeWidgetItem([str(addr), tag_name, bit_val, "-", "-", "-", "-", "-", "-", "-"])
+                self.results_table.addTopLevelItem(item)
                 continue
 
             # Apply byte order reversal if needed
             if reverse_byte:
                 value = ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
 
-            # Check if we should expand this register into bit rows
-            if bit_expansion_needed:
-                # Find all bit tags for this register
-                bit_tags_for_register = []
-                for bit in range(16):
-                    tag = self.tag_mappings.get((addr, bit))
-                    if tag:
-                        bit_tags_for_register.append((bit, tag))
-
-                if bit_tags_for_register:
-                    # Create a row for each bit with a tag
-                    for bit, tag in bit_tags_for_register:
-                        bit_value = (value >> bit) & 1
-                        table_rows.append({
-                            'address': f"{addr}.{bit}",
-                            'tag_name': tag,
-                            'bit': bit,
-                            'bit_value': str(bit_value),
-                            'register_value': value,
-                            'addr_num': addr,
-                            'index': i
-                        })
-                else:
-                    # No bit tags, show as whole register
-                    tag_name = self.tag_mappings.get((addr, None), "")
-                    table_rows.append({
-                        'address': str(addr),
-                        'tag_name': tag_name,
-                        'value': value,
-                        'addr_num': addr,
-                        'index': i
-                    })
-            else:
-                # Normal register display
-                tag_name = self.tag_mappings.get((addr, None), "")
-                table_rows.append({
-                    'address': str(addr),
-                    'tag_name': tag_name,
-                    'value': value,
-                    'addr_num': addr,
-                    'index': i
-                })
-
-        # Set table row count
-        self.results_table.setRowCount(len(table_rows))
-
-        # Populate table
-        for row_idx, row_data in enumerate(table_rows):
-            # Address column
-            self.results_table.setItem(row_idx, 0, QTableWidgetItem(row_data['address']))
-
-            # Tag Name column
-            self.results_table.setItem(row_idx, 1, QTableWidgetItem(row_data.get('tag_name', '')))
-
-            # Handle error rows
-            if 'error' in row_data:
-                for col in range(2, 10):
-                    item = QTableWidgetItem("ERROR")
-                    item.setToolTip(row_data['error'])
-                    self.results_table.setItem(row_idx, col, item)
-                continue
-
-            # Handle bit expansion rows
-            if 'bit_value' in row_data and 'bit' in row_data:
-                # Bit value in Hex column
-                self.results_table.setItem(row_idx, 2, QTableWidgetItem(row_data['bit_value']))
-                # Show register value in Binary and Uint16 columns for context
-                if 'register_value' in row_data:
-                    reg_val = row_data['register_value']
-                    binary_val = format(reg_val, '016b')
-                    self.results_table.setItem(row_idx, 3, QTableWidgetItem(binary_val))
-                    self.results_table.setItem(row_idx, 4, QTableWidgetItem(f"0x{reg_val:04X}"))
-                # Mark other columns as N/A
-                for col in range(5, 10):
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
-                continue
-
-            # Handle coils/discrete (already bit values)
-            if 'bit_value' in row_data and 'bit' not in row_data:
-                self.results_table.setItem(row_idx, 2, QTableWidgetItem(row_data['bit_value']))
-                for col in range(3, 10):
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
-                continue
-
-            # Normal register row
-            if 'value' not in row_data:
-                continue
-
-            value = row_data['value']
-            i = row_data.get('index', 0)
-
-            # Hex value (column 2)
+            # Create parent item for the register
             hex_val = f"0x{value:04X}"
-            self.results_table.setItem(row_idx, 2, QTableWidgetItem(hex_val))
-
-            # Binary value (column 3)
             binary_val = format(value, '016b')
-            self.results_table.setItem(row_idx, 3, QTableWidgetItem(binary_val))
 
-            # Uint16 (column 4)
-            self.results_table.setItem(row_idx, 4, QTableWidgetItem(str(value)))
+            # Get tag for whole register
+            whole_reg_tag = self.tag_mappings.get((addr, None), "")
 
-            # Int16 (column 5)
+            # Uint16, Int16
+            uint16_val = str(value)
             int16_val = value if value < 32768 else value - 65536
-            self.results_table.setItem(row_idx, 5, QTableWidgetItem(str(int16_val)))
 
-            # Uint32, Int32, Float32 (columns 6-8)
+            # Uint32, Int32, Float32
+            uint32_str = "-"
+            int32_str = "-"
+            float32_str = "-"
+
             if i + 1 < len(registers):
                 next_value = registers[i + 1]
-                if isinstance(next_value, dict) and 'error' in next_value:
-                    for col in range(6, 9):
-                        self.results_table.setItem(row_idx, col, QTableWidgetItem("N/A"))
-                else:
+                if not (isinstance(next_value, dict) and 'error' in next_value):
                     if reverse_byte:
                         next_value = ((next_value & 0xFF) << 8) | ((next_value >> 8) & 0xFF)
 
@@ -788,10 +698,9 @@ Built with Python, PyQt6, and pymodbus
                     else:
                         uint32_val = (value << 16) | next_value
 
-                    self.results_table.setItem(row_idx, 6, QTableWidgetItem(str(uint32_val)))
-
+                    uint32_str = str(uint32_val)
                     int32_val = uint32_val if uint32_val < 2147483648 else uint32_val - 4294967296
-                    self.results_table.setItem(row_idx, 7, QTableWidgetItem(str(int32_val)))
+                    int32_str = str(int32_val)
 
                     try:
                         if reverse_word:
@@ -799,14 +708,11 @@ Built with Python, PyQt6, and pymodbus
                         else:
                             bytes_data = struct.pack('>HH', value, next_value)
                         float_val = struct.unpack('>f', bytes_data)[0]
-                        self.results_table.setItem(row_idx, 8, QTableWidgetItem(f"{float_val:.6f}"))
+                        float32_str = f"{float_val:.6f}"
                     except:
-                        self.results_table.setItem(row_idx, 8, QTableWidgetItem("N/A"))
-            else:
-                for col in range(6, 9):
-                    self.results_table.setItem(row_idx, col, QTableWidgetItem("-"))
+                        float32_str = "N/A"
 
-            # String (column 9)
+            # String
             try:
                 high_byte = (value >> 8) & 0xFF
                 low_byte = value & 0xFF
@@ -816,9 +722,176 @@ Built with Python, PyQt6, and pymodbus
                 if 32 <= low_byte <= 126:
                     chars.append(chr(low_byte))
                 string_val = ''.join(chars) if chars else '.'
-                self.results_table.setItem(row_idx, 9, QTableWidgetItem(string_val))
             except:
-                self.results_table.setItem(row_idx, 9, QTableWidgetItem('.'))
+                string_val = '.'
+
+            # Create parent item
+            parent_item = QTreeWidgetItem([
+                str(addr),
+                whole_reg_tag,
+                hex_val,
+                binary_val,
+                uint16_val,
+                str(int16_val),
+                uint32_str,
+                int32_str,
+                float32_str,
+                string_val
+            ])
+
+            # Make Tag Name column editable
+            parent_item.setFlags(parent_item.flags() | Qt.ItemFlag.ItemIsEditable)
+
+            self.results_table.addTopLevelItem(parent_item)
+
+            # Always add child items for all 16 bits
+            for bit in range(16):
+                bit_value = (value >> bit) & 1
+                # Get tag for this bit if it exists
+                bit_tag = self.tag_mappings.get((addr, bit), "")
+
+                bit_item = QTreeWidgetItem([
+                    f"{addr}.{bit}",
+                    bit_tag,
+                    str(bit_value),
+                    binary_val,  # Show full register binary for context
+                    hex_val,     # Show full register hex for context
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-"
+                ])
+                # Make Tag Name editable for bit rows too
+                bit_item.setFlags(bit_item.flags() | Qt.ItemFlag.ItemIsEditable)
+                parent_item.addChild(bit_item)
+
+            # Use auto_expand_bits preference for new items
+            if self.auto_expand_bits:
+                parent_item.setExpanded(True)
+            else:
+                parent_item.setExpanded(False)
+
+    def _update_table_values(self, registers, start_address, reverse_byte, reverse_word, zero_based, is_bit_type):
+        """Update existing table items in place (preserves tag names, expansion state, scroll position)"""
+
+        for i, value in enumerate(registers):
+            # Calculate display address
+            addr = start_address + i
+            if not zero_based:
+                addr += 1  # Display as 1-based
+
+            # Get the existing parent item
+            parent_item = self.results_table.topLevelItem(i)
+            if not parent_item:
+                continue
+
+            # Check if this is an error entry
+            if isinstance(value, dict) and 'error' in value:
+                parent_item.setText(0, str(addr))
+                parent_item.setText(2, "ERROR")
+                parent_item.setText(3, "ERROR")
+                parent_item.setText(4, "ERROR")
+                parent_item.setText(5, "ERROR")
+                parent_item.setText(6, "ERROR")
+                parent_item.setText(7, "ERROR")
+                parent_item.setText(8, "ERROR")
+                parent_item.setText(9, "ERROR")
+                parent_item.setToolTip(0, value['error'])
+                continue
+
+            # Handle bit values (coils/discrete inputs)
+            if is_bit_type:
+                bit_val = "1" if value else "0"
+                parent_item.setText(0, str(addr))
+                parent_item.setText(2, bit_val)
+                parent_item.setText(3, "-")
+                parent_item.setText(4, "-")
+                parent_item.setText(5, "-")
+                parent_item.setText(6, "-")
+                parent_item.setText(7, "-")
+                parent_item.setText(8, "-")
+                parent_item.setText(9, "-")
+                continue
+
+            # Apply byte order reversal if needed
+            if reverse_byte:
+                value = ((value & 0xFF) << 8) | ((value >> 8) & 0xFF)
+
+            # Update parent item values
+            hex_val = f"0x{value:04X}"
+            binary_val = format(value, '016b')
+            uint16_val = str(value)
+            int16_val = value if value < 32768 else value - 65536
+
+            # Uint32, Int32, Float32
+            uint32_str = "-"
+            int32_str = "-"
+            float32_str = "-"
+
+            if i + 1 < len(registers):
+                next_value = registers[i + 1]
+                if not (isinstance(next_value, dict) and 'error' in next_value):
+                    if reverse_byte:
+                        next_value = ((next_value & 0xFF) << 8) | ((next_value >> 8) & 0xFF)
+
+                    if reverse_word:
+                        uint32_val = (next_value << 16) | value
+                    else:
+                        uint32_val = (value << 16) | next_value
+
+                    uint32_str = str(uint32_val)
+                    int32_val = uint32_val if uint32_val < 2147483648 else uint32_val - 4294967296
+                    int32_str = str(int32_val)
+
+                    try:
+                        if reverse_word:
+                            bytes_data = struct.pack('>HH', next_value, value)
+                        else:
+                            bytes_data = struct.pack('>HH', value, next_value)
+                        float_val = struct.unpack('>f', bytes_data)[0]
+                        float32_str = f"{float_val:.6f}"
+                    except:
+                        float32_str = "N/A"
+
+            # String
+            try:
+                high_byte = (value >> 8) & 0xFF
+                low_byte = value & 0xFF
+                chars = []
+                if 32 <= high_byte <= 126:
+                    chars.append(chr(high_byte))
+                if 32 <= low_byte <= 126:
+                    chars.append(chr(low_byte))
+                string_val = ''.join(chars) if chars else '.'
+            except:
+                string_val = '.'
+
+            # Update parent item (preserve column 1 - Tag Name)
+            parent_item.setText(0, str(addr))
+            # Column 1 (Tag Name) is NOT updated - preserves user edits
+            parent_item.setText(2, hex_val)
+            parent_item.setText(3, binary_val)
+            parent_item.setText(4, uint16_val)
+            parent_item.setText(5, str(int16_val))
+            parent_item.setText(6, uint32_str)
+            parent_item.setText(7, int32_str)
+            parent_item.setText(8, float32_str)
+            parent_item.setText(9, string_val)
+
+            # Update child bit items
+            for bit in range(16):
+                if bit < parent_item.childCount():
+                    bit_item = parent_item.child(bit)
+                    bit_value = (value >> bit) & 1
+
+                    # Update bit item (preserve column 1 - Tag Name)
+                    bit_item.setText(0, f"{addr}.{bit}")
+                    # Column 1 (Tag Name) is NOT updated - preserves user edits
+                    bit_item.setText(2, str(bit_value))
+                    bit_item.setText(3, binary_val)
+                    bit_item.setText(4, hex_val)
+
     def read_registers(self, ip, port, unit_id, timeout, register_type, start_reg, count):
         """Read registers from a Modbus device"""
         result = {
@@ -946,7 +1019,7 @@ Built with Python, PyQt6, and pymodbus
 
     def export_results(self):
         """Export results to a CSV file"""
-        if self.results_table.rowCount() == 0:
+        if self.results_table.topLevelItemCount() == 0:
             QMessageBox.information(self, "Export", "No results to export")
             return
 
@@ -957,16 +1030,18 @@ Built with Python, PyQt6, and pymodbus
                 # Write header
                 headers = []
                 for col in range(self.results_table.columnCount()):
-                    headers.append(self.results_table.horizontalHeaderItem(col).text())
+                    headers.append(self.results_table.headerItem().text(col))
                 f.write(','.join(headers) + '\n')
 
-                # Write data
-                for row in range(self.results_table.rowCount()):
+                # Write data (iterate through tree items)
+                iterator = QTreeWidgetItemIterator(self.results_table)
+                while iterator.value():
+                    item = iterator.value()
                     row_data = []
                     for col in range(self.results_table.columnCount()):
-                        item = self.results_table.item(row, col)
-                        row_data.append(item.text() if item else '')
+                        row_data.append(item.text(col))
                     f.write(','.join(row_data) + '\n')
+                    iterator += 1
 
             QMessageBox.information(self, "Export", f"Results exported to {filename}")
         except Exception as e:
@@ -1012,12 +1087,18 @@ Built with Python, PyQt6, and pymodbus
                 key = (tag['address'], tag.get('bit'))
                 self.tag_mappings[key] = tag['tag_name']
 
-            # Update tags imported flag and column visibility
+            # Update tags imported flag
             if self.tag_mappings:
                 self.tags_imported = True
-                self.update_table_columns()
 
-            # Show summary dialog
+            # Create custom dialog with auto-expand checkbox
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Import Successful")
+            dialog.setMinimumWidth(500)
+
+            layout = QVBoxLayout()
+
+            # Summary text
             summary = f"""Successfully imported KEPServerEX configuration:
 
 Connection:
@@ -1036,7 +1117,25 @@ Tags:
 The connection settings have been auto-populated.
 Click 'Read Registers' to start scanning."""
 
-            QMessageBox.information(self, "Import Successful", summary)
+            label = QLabel(summary)
+            layout.addWidget(label)
+
+            # Auto-expand checkbox
+            auto_expand_check = QCheckBox("Automatically expand bit rows when scanning")
+            auto_expand_check.setChecked(self.auto_expand_bits)  # Use current preference
+            layout.addWidget(auto_expand_check)
+
+            # OK button
+            button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+            button_box.accepted.connect(dialog.accept)
+            layout.addWidget(button_box)
+
+            dialog.setLayout(layout)
+
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                # Save the auto-expand preference
+                self.auto_expand_bits = auto_expand_check.isChecked()
+
             self.signals.status.emit("KEPServerEX configuration imported successfully")
 
         except Exception as e:
