@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
                              QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
                              QAbstractItemView, QDialog, QDialogButtonBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSettings
 from PyQt6.QtGui import QTextCursor, QColor, QTextCharFormat
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
@@ -39,7 +39,7 @@ class ModbusScannerGUI(QMainWindow):
         super().__init__()
         self.app_version = "1.1.0"
         self.setWindowTitle("ModScan Tool")
-        self.setGeometry(100, 100, 900, 700)
+        self.setGeometry(100, 100, 1050, 750)
 
         self.scanning = False
         self.scan_thread = None
@@ -47,6 +47,9 @@ class ModbusScannerGUI(QMainWindow):
         self.tag_mappings = {}  # Store tag mappings from imported .opf files
         self.tags_imported = False  # Track if tags have been imported
         self.auto_expand_bits = False  # Preference for auto-expanding bit rows
+
+        # Settings for IP history
+        self.settings = QSettings("ModScanTool", "ModbusScannerGUI")
 
         # Connect signals
         self.signals.log.connect(self.log_message)
@@ -57,6 +60,7 @@ class ModbusScannerGUI(QMainWindow):
 
         self.init_ui()
         self.create_menu_bar()
+        self.load_settings()
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -64,96 +68,83 @@ class ModbusScannerGUI(QMainWindow):
         self.setCentralWidget(central_widget)
 
         layout = QVBoxLayout()
+        layout.setSpacing(10)
         central_widget.setLayout(layout)
 
-        # Settings Group
-        settings_group = QGroupBox("Connection Settings")
-        settings_layout = QVBoxLayout()
+        # Connection Settings Group - Horizontal Layout
+        connection_group = QGroupBox("Connection")
+        connection_layout = QHBoxLayout()
+        connection_layout.setSpacing(15)
 
-        # IP Address
-        ip_layout = QHBoxLayout()
-        ip_layout.addWidget(QLabel("IP Address:"))
-        self.ip_entry = QLineEdit("192.168.1.1")
-        self.ip_entry.setPlaceholderText("e.g., 192.168.1.100")
-        self.ip_entry.setMaximumWidth(200)
-        ip_layout.addWidget(self.ip_entry)
-        ip_layout.addStretch()
-        settings_layout.addLayout(ip_layout)
+        # IP Address with history dropdown
+        connection_layout.addWidget(QLabel("IP Address:"))
+        self.ip_combo = QComboBox()
+        self.ip_combo.setEditable(True)
+        self.ip_combo.setMinimumWidth(150)
+        self.ip_combo.setMaximumWidth(200)
+        self.ip_combo.addItem("192.168.1.1")
+        self.ip_combo.addItem("127.0.0.1")
+        self.ip_combo.setCurrentIndex(0)
+        connection_layout.addWidget(self.ip_combo)
 
         # Port
-        port_layout = QHBoxLayout()
-        port_layout.addWidget(QLabel("Port:"))
+        connection_layout.addWidget(QLabel("Port:"))
         self.port_entry = QLineEdit("502")
-        self.port_entry.setMaximumWidth(100)
-        port_layout.addWidget(self.port_entry)
-        port_layout.addStretch()
-        settings_layout.addLayout(port_layout)
+        self.port_entry.setMaximumWidth(80)
+        connection_layout.addWidget(self.port_entry)
 
         # Unit ID
-        unit_layout = QHBoxLayout()
-        unit_layout.addWidget(QLabel("Unit ID:"))
+        connection_layout.addWidget(QLabel("Unit ID:"))
         self.unit_entry = QLineEdit("1")
-        self.unit_entry.setMaximumWidth(100)
-        unit_layout.addWidget(self.unit_entry)
-        unit_layout.addStretch()
-        settings_layout.addLayout(unit_layout)
+        self.unit_entry.setMaximumWidth(80)
+        connection_layout.addWidget(self.unit_entry)
 
         # Timeout
-        timeout_layout = QHBoxLayout()
-        timeout_layout.addWidget(QLabel("Timeout (seconds):"))
+        connection_layout.addWidget(QLabel("Timeout:"))
         self.timeout_entry = QLineEdit("2")
-        self.timeout_entry.setMaximumWidth(100)
-        timeout_layout.addWidget(self.timeout_entry)
-        timeout_layout.addStretch()
-        settings_layout.addLayout(timeout_layout)
+        self.timeout_entry.setMaximumWidth(60)
+        connection_layout.addWidget(self.timeout_entry)
+        connection_layout.addWidget(QLabel("sec"))
+
+        connection_layout.addStretch()
+        connection_group.setLayout(connection_layout)
+        layout.addWidget(connection_group)
+
+        # Register Settings Group - Horizontal Layout
+        register_group = QGroupBox("Register Configuration")
+        register_layout = QHBoxLayout()
+        register_layout.setSpacing(15)
+
+        # Data Type dropdown
+        register_layout.addWidget(QLabel("Data Type:"))
+        self.register_type_combo = QComboBox()
+        self.register_type_combo.addItem("Holding Registers (16-bit)", "holding")
+        self.register_type_combo.addItem("Input Registers (16-bit)", "input")
+        self.register_type_combo.addItem("Coils (1-bit)", "coils")
+        self.register_type_combo.addItem("Discrete Inputs (1-bit)", "discrete")
+        self.register_type_combo.setMinimumWidth(200)
+        register_layout.addWidget(self.register_type_combo)
 
         # Start Register
-        start_reg_layout = QHBoxLayout()
-        start_reg_layout.addWidget(QLabel("Start Register:"))
+        register_layout.addWidget(QLabel("Start:"))
         self.start_register_entry = QLineEdit("0")
-        self.start_register_entry.setMaximumWidth(100)
-        start_reg_layout.addWidget(self.start_register_entry)
-        start_reg_layout.addStretch()
-        settings_layout.addLayout(start_reg_layout)
+        self.start_register_entry.setMaximumWidth(80)
+        register_layout.addWidget(self.start_register_entry)
 
         # Register Count
-        count_layout = QHBoxLayout()
-        count_layout.addWidget(QLabel("Register Count:"))
+        register_layout.addWidget(QLabel("Count:"))
         self.register_count_entry = QLineEdit("10")
-        self.register_count_entry.setMaximumWidth(100)
-        count_layout.addWidget(self.register_count_entry)
-        count_layout.addStretch()
-        settings_layout.addLayout(count_layout)
-
-        # Register type selection
-        register_layout = QHBoxLayout()
-        register_layout.addWidget(QLabel("Data Type:"))
-
-        self.register_button_group = QButtonGroup()
-
-        self.holding_radio = QRadioButton("Holding Registers (16-bit)")
-        self.holding_radio.setChecked(True)
-        self.register_button_group.addButton(self.holding_radio, 1)
-        register_layout.addWidget(self.holding_radio)
-
-        self.input_radio = QRadioButton("Input Registers (16-bit)")
-        self.register_button_group.addButton(self.input_radio, 2)
-        register_layout.addWidget(self.input_radio)
-
-        self.coils_radio = QRadioButton("Coils (1-bit)")
-        self.register_button_group.addButton(self.coils_radio, 3)
-        register_layout.addWidget(self.coils_radio)
-
-        self.discrete_radio = QRadioButton("Discrete Inputs (1-bit)")
-        self.register_button_group.addButton(self.discrete_radio, 4)
-        register_layout.addWidget(self.discrete_radio)
+        self.register_count_entry.setMaximumWidth(80)
+        register_layout.addWidget(self.register_count_entry)
 
         register_layout.addStretch()
-        settings_layout.addLayout(register_layout)
+        register_group.setLayout(register_layout)
+        layout.addWidget(register_group)
 
-        # Data interpretation options
+        # Options Group - Horizontal Layout
+        options_group = QGroupBox("Options")
         options_layout = QHBoxLayout()
-        options_layout.addWidget(QLabel("Options:"))
+        options_layout.setSpacing(15)
 
         self.reverse_byte_order_check = QCheckBox("Reverse Byte Order")
         options_layout.addWidget(self.reverse_byte_order_check)
@@ -165,27 +156,22 @@ class ModbusScannerGUI(QMainWindow):
         self.zero_based_check.setChecked(True)
         options_layout.addWidget(self.zero_based_check)
 
-        options_layout.addStretch()
-        settings_layout.addLayout(options_layout)
-
-        # Continuous polling option
-        polling_layout = QHBoxLayout()
         self.continuous_read_check = QCheckBox("Continuous Read")
-        polling_layout.addWidget(self.continuous_read_check)
+        options_layout.addWidget(self.continuous_read_check)
 
-        polling_layout.addWidget(QLabel("Interval (seconds):"))
+        options_layout.addWidget(QLabel("Interval:"))
         self.polling_interval_entry = QLineEdit("1")
-        self.polling_interval_entry.setMaximumWidth(60)
-        polling_layout.addWidget(self.polling_interval_entry)
+        self.polling_interval_entry.setMaximumWidth(50)
+        options_layout.addWidget(self.polling_interval_entry)
+        options_layout.addWidget(QLabel("sec"))
 
-        self.read_individually_check = QCheckBox("Read Individually (slower, handles missing registers)")
-        polling_layout.addWidget(self.read_individually_check)
+        self.read_individually_check = QCheckBox("Read Individually")
+        self.read_individually_check.setToolTip("Slower, but handles missing registers")
+        options_layout.addWidget(self.read_individually_check)
 
-        polling_layout.addStretch()
-        settings_layout.addLayout(polling_layout)
-
-        settings_group.setLayout(settings_layout)
-        layout.addWidget(settings_group)
+        options_layout.addStretch()
+        options_group.setLayout(options_layout)
+        layout.addWidget(options_group)
 
         # Control Buttons
         button_layout = QHBoxLayout()
@@ -280,6 +266,47 @@ class ModbusScannerGUI(QMainWindow):
 
         results_group.setLayout(results_layout)
         layout.addWidget(results_group)
+
+    def load_settings(self):
+        """Load saved settings from QSettings"""
+        # Load IP history
+        ip_history = self.settings.value("ip_history", [])
+        if ip_history:
+            self.ip_combo.clear()
+            for ip in ip_history:
+                self.ip_combo.addItem(ip)
+            self.ip_combo.setCurrentIndex(0)
+
+    def save_settings(self):
+        """Save current settings to QSettings"""
+        # Save IP history (keep last 10 unique IPs)
+        ip_history = []
+        current_ip = self.ip_combo.currentText()
+
+        # Add current IP first
+        if current_ip:
+            ip_history.append(current_ip)
+
+        # Add other IPs from combo
+        for i in range(self.ip_combo.count()):
+            ip = self.ip_combo.itemText(i)
+            if ip and ip not in ip_history:
+                ip_history.append(ip)
+
+        # Keep only last 10
+        ip_history = ip_history[:10]
+        self.settings.setValue("ip_history", ip_history)
+
+    def get_register_type(self):
+        """Get the selected register type from combo box"""
+        return self.register_type_combo.currentData()
+
+    def set_register_type(self, reg_type):
+        """Set the register type in combo box by data value"""
+        for i in range(self.register_type_combo.count()):
+            if self.register_type_combo.itemData(i) == reg_type:
+                self.register_type_combo.setCurrentIndex(i)
+                return
 
     def create_menu_bar(self):
         """Create the menu bar with File and Help menus"""
@@ -444,7 +471,8 @@ Built with Python, PyQt6, and pymodbus
             reg_count = int(self.register_count_entry.text())
 
             # Check limits based on data type
-            is_bit_type = self.coils_radio.isChecked() or self.discrete_radio.isChecked()
+            reg_type = self.get_register_type()
+            is_bit_type = reg_type in ['coils', 'discrete']
             if is_bit_type:
                 if reg_count < 1 or reg_count > 2000:
                     raise ValueError("Bit count must be between 1 and 2000 for coils/discrete inputs")
@@ -461,7 +489,7 @@ Built with Python, PyQt6, and pymodbus
                     raise ValueError("Register range exceeds maximum address (65536)")
 
             # Validate IP address
-            ipaddress.ip_address(self.ip_entry.text().strip())
+            ipaddress.ip_address(self.ip_combo.currentText().strip())
 
             return True
         except ValueError as e:
@@ -494,7 +522,7 @@ Built with Python, PyQt6, and pymodbus
     def scan_worker(self):
         """Worker thread for reading registers"""
         try:
-            ip = self.ip_entry.text().strip()
+            ip = self.ip_combo.currentText().strip()
             port = int(self.port_entry.text())
             timeout = float(self.timeout_entry.text())
             unit_id = int(self.unit_entry.text())
@@ -503,6 +531,9 @@ Built with Python, PyQt6, and pymodbus
             zero_based = self.zero_based_check.isChecked()
             continuous = self.continuous_read_check.isChecked()
             read_individually = self.read_individually_check.isChecked()
+
+            # Save settings (including IP history)
+            self.save_settings()
 
             # Get polling interval
             try:
@@ -521,18 +552,14 @@ Built with Python, PyQt6, and pymodbus
                 start_reg -= 1
 
             # Determine register type to read
-            if self.holding_radio.isChecked():
-                register_type = 'holding'
-                reg_name = "Holding Registers"
-            elif self.input_radio.isChecked():
-                register_type = 'input'
-                reg_name = "Input Registers"
-            elif self.coils_radio.isChecked():
-                register_type = 'coils'
-                reg_name = "Coils"
-            else:  # discrete inputs
-                register_type = 'discrete'
-                reg_name = "Discrete Inputs"
+            register_type = self.get_register_type()
+            reg_name_map = {
+                'holding': "Holding Registers",
+                'input': "Input Registers",
+                'coils': "Coils",
+                'discrete': "Discrete Inputs"
+            }
+            reg_name = reg_name_map.get(register_type, "Unknown")
 
             self.signals.log.emit(f"Device: {ip}:{port}", "")
             self.signals.log.emit(f"Unit ID: {unit_id}", "")
@@ -1073,7 +1100,11 @@ Built with Python, PyQt6, and pymodbus
 
             # Populate connection settings
             if config['ip']:
-                self.ip_entry.setText(config['ip'])
+                self.ip_combo.setCurrentText(config['ip'])
+                # Add to combo if not already there
+                if self.ip_combo.findText(config['ip']) == -1:
+                    self.ip_combo.addItem(config['ip'])
+                    self.ip_combo.setCurrentText(config['ip'])
 
             self.port_entry.setText(str(config['port']))
             self.unit_entry.setText(str(config['unit_id']))
@@ -1084,7 +1115,7 @@ Built with Python, PyQt6, and pymodbus
                 self.register_count_entry.setText(str(config['scan_count']))
 
             # Set to holding registers by default
-            self.holding_radio.setChecked(True)
+            self.set_register_type('holding')
 
             # Store tag mappings for display
             # Create a lookup dict: (address, bit) -> tag_name
