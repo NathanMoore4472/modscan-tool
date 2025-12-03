@@ -750,8 +750,11 @@ Built with Python, PyQt6, and pymodbus
                 # Get tag for this bit if it exists
                 bit_tag = self.tag_mappings.get((addr, bit), "")
 
+                # Display bit number based on addressing mode
+                bit_display = bit + 1 if not zero_based else bit
+
                 bit_item = QTreeWidgetItem([
-                    f"{addr}.{bit}",
+                    f"{addr}.{bit_display}",
                     bit_tag,
                     str(bit_value),
                     binary_val,  # Show full register binary for context
@@ -885,8 +888,11 @@ Built with Python, PyQt6, and pymodbus
                     bit_item = parent_item.child(bit)
                     bit_value = (value >> bit) & 1
 
+                    # Display bit number based on addressing mode
+                    bit_display = bit + 1 if not zero_based else bit
+
                     # Update bit item (preserve column 1 - Tag Name)
-                    bit_item.setText(0, f"{addr}.{bit}")
+                    bit_item.setText(0, f"{addr}.{bit_display}")
                     # Column 1 (Tag Name) is NOT updated - preserves user edits
                     bit_item.setText(2, str(bit_value))
                     bit_item.setText(3, binary_val)
