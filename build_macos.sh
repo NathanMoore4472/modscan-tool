@@ -58,14 +58,16 @@ echo "Build complete!"
 echo "Application location: dist/ModScan Tool.app"
 echo ""
 
-# Create DMG
-echo "Creating DMG..."
+# Create DMG for manual distribution
+echo "Creating DMG for manual distribution..."
 DMG_NAME="ModScan-Tool-macOS.dmg"
+ZIP_NAME="ModScan-Tool-macOS.zip"
 DMG_TEMP="dist/dmg_temp"
 APP_NAME="ModScan Tool.app"
 
-# Remove old DMG if exists
+# Remove old files if they exist
 rm -f "dist/$DMG_NAME"
+rm -f "dist/$ZIP_NAME"
 
 # Create temporary directory for DMG contents
 mkdir -p "$DMG_TEMP"
@@ -79,10 +81,23 @@ hdiutil create -volname "ModScan Tool" \
     -ov -format UDZO \
     "dist/$DMG_NAME"
 
-# Clean up
+# Clean up DMG temp
 rm -rf "$DMG_TEMP"
 
+echo "✓ DMG created: dist/$DMG_NAME"
+
+# Create ZIP for auto-updater
+echo "Creating ZIP for auto-updater..."
+cd dist
+zip -r -q "$ZIP_NAME" "$APP_NAME"
+cd ..
+
+echo "✓ ZIP created: dist/$ZIP_NAME"
 echo ""
-echo "DMG created successfully!"
-echo "Location: dist/$DMG_NAME"
+echo "=========================================="
+echo "Build Complete!"
+echo "=========================================="
+echo "Upload both files to GitHub releases:"
+echo "  • $DMG_NAME (for manual downloads)"
+echo "  • $ZIP_NAME (for auto-updater)"
 echo ""

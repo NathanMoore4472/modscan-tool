@@ -53,7 +53,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.4"
+        self.app_version = "1.1.5"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -414,7 +414,7 @@ Built with Python, PyQt6, and pymodbus
         if system == "Windows":
             return "ModScan-Tool-Windows.exe"
         elif system == "Darwin":  # macOS
-            return "ModScan-Tool-macOS.dmg"
+            return "ModScan-Tool-macOS.zip"
         elif system == "Linux":
             return "ModScan-Tool-Linux.tar.gz"
         else:
@@ -528,8 +528,36 @@ Built with Python, PyQt6, and pymodbus
 
     def install_update(self, new_executable_path):
         """Install the downloaded update and restart"""
+        import zipfile
+        import tarfile
+
         current_exe = self.get_executable_path()
         system = platform.system()
+        extract_dir = os.path.join(tempfile.gettempdir(), "modscan_update")
+
+        # Extract archive if needed
+        if system == "Darwin" and new_executable_path.endswith('.zip'):
+            # Extract zip for macOS
+            os.makedirs(extract_dir, exist_ok=True)
+            with zipfile.ZipFile(new_executable_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            # Find the .app bundle
+            app_name = "ModScan Tool.app"
+            extracted_app = os.path.join(extract_dir, app_name)
+            if os.path.exists(extracted_app):
+                new_executable_path = extracted_app
+
+        elif system == "Linux" and new_executable_path.endswith('.tar.gz'):
+            # Extract tar.gz for Linux
+            os.makedirs(extract_dir, exist_ok=True)
+            with tarfile.open(new_executable_path, 'r:gz') as tar_ref:
+                tar_ref.extractall(extract_dir)
+            # Find the executable
+            for item in os.listdir(extract_dir):
+                item_path = os.path.join(extract_dir, item)
+                if os.path.isfile(item_path) and os.access(item_path, os.X_OK):
+                    new_executable_path = item_path
+                    break
 
         if system == "Windows":
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.bat")
@@ -543,13 +571,16 @@ del "%~f0"
             subprocess.Popen(['cmd', '/c', updater_script], shell=False)
 
         elif system == "Darwin":
+            # For macOS, replace entire .app bundle
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
             with open(updater_script, 'w') as f:
                 f.write(f"""#!/bin/bash
 sleep 2
+rm -rf "{current_exe}"
 mv -f "{new_executable_path}" "{current_exe}"
-chmod +x "{current_exe}"
+chmod -R +x "{current_exe}"
 open "{current_exe}"
+rm -rf "{extract_dir}"
 rm "$0"
 """)
             os.chmod(updater_script, 0o755)
@@ -563,6 +594,7 @@ sleep 2
 mv -f "{new_executable_path}" "{current_exe}"
 chmod +x "{current_exe}"
 "{current_exe}" &
+rm -rf "{extract_dir}"
 rm "$0"
 """)
             os.chmod(updater_script, 0o755)
