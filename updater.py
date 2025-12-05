@@ -164,6 +164,7 @@ class UpdateChecker:
         Args:
             silent: If True, only show dialog if update is available
         """
+        print(f"Checking for updates... (silent={silent}, current version={self.app_version})")
         try:
             url = "https://api.github.com/repos/NathanMoore4472/modscan-tool/releases/latest"
             req = urllib.request.Request(url)
@@ -183,8 +184,11 @@ class UpdateChecker:
             release_notes = data.get('body', '')
             assets = data.get('assets', [])
 
+            print(f"Latest version: {latest_version}, Current version: {self.app_version}")
+
             # Compare versions
             if self._is_newer_version(latest_version, self.app_version):
+                print(f"Update available! {latest_version} > {self.app_version}")
                 self.show_update_dialog(latest_version, release_url, release_notes, assets)
             elif not silent:
                 QMessageBox.information(
@@ -194,6 +198,8 @@ class UpdateChecker:
                 )
 
         except urllib.error.URLError as e:
+            # Always log errors to console for debugging
+            print(f"Update check failed (URLError): {e}")
             if not silent:
                 QMessageBox.warning(
                     self.parent,
@@ -201,6 +207,10 @@ class UpdateChecker:
                     f"Could not check for updates: {str(e)}"
                 )
         except Exception as e:
+            # Always log errors to console for debugging
+            print(f"Update check failed (Exception): {e}")
+            import traceback
+            traceback.print_exc()
             if not silent:
                 QMessageBox.warning(
                     self.parent,
@@ -332,8 +342,9 @@ class UpdateChecker:
             note_label.setTextFormat(Qt.TextFormat.RichText)
             layout.addWidget(note_label)
 
-        # Checkbox for disabling startup checks
-        checkbox = QCheckBox("Don't check for updates on startup")
+        # Checkbox for startup checks
+        checkbox = QCheckBox("Check for updates on startup")
+        checkbox.setChecked(self.check_updates_on_startup)  # Set current state
         layout.addWidget(checkbox)
 
         # Buttons
@@ -371,10 +382,9 @@ class UpdateChecker:
         # Show dialog and handle result
         result = dialog.exec()
 
-        # Save checkbox state
-        if checkbox.isChecked():
-            self.check_updates_on_startup = False
-            self.settings.setValue("check_updates_on_startup", False)
+        # Save checkbox state (always save, whether checked or unchecked)
+        self.check_updates_on_startup = checkbox.isChecked()
+        self.settings.setValue("check_updates_on_startup", checkbox.isChecked())
 
         # Handle button clicks
         if result == QDialog.DialogCode.Accepted:

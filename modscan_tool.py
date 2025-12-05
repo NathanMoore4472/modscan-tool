@@ -39,7 +39,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.2.1"
+        self.app_version = "1.2.0"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -68,8 +68,10 @@ class ModbusScannerGUI(QMainWindow):
         self.load_settings()
 
         # Check for updates on startup if enabled
+        print(f"Update check on startup enabled: {self.updater.check_updates_on_startup}")
         if self.updater.check_updates_on_startup:
             from PyQt6.QtCore import QTimer
+            print("Scheduling update check in 1 second...")
             QTimer.singleShot(1000, lambda: self.updater.check_for_updates(silent=True))
 
     def init_ui(self):
