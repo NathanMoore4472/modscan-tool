@@ -53,7 +53,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.5"
+        self.app_version = "1.1.6"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -427,6 +427,22 @@ Built with Python, PyQt6, and pymodbus
         else:
             return os.path.abspath(__file__)
 
+    def get_app_bundle_path(self):
+        """Get the path to the .app bundle on macOS"""
+        if platform.system() == "Darwin" and self.is_frozen():
+            # sys.executable is like: /Applications/ModScan Tool.app/Contents/MacOS/ModScan Tool
+            # We need: /Applications/ModScan Tool.app
+            exe_path = sys.executable
+            # Find the .app bundle by going up from the executable
+            parts = exe_path.split('/')
+            try:
+                app_index = next(i for i, part in enumerate(parts) if part.endswith('.app'))
+                return '/'.join(parts[:app_index + 1])
+            except StopIteration:
+                return exe_path
+        else:
+            return self.get_executable_path()
+
     def check_for_updates(self, silent=False):
         """Check for updates from GitHub releases"""
         try:
@@ -531,8 +547,14 @@ Built with Python, PyQt6, and pymodbus
         import zipfile
         import tarfile
 
-        current_exe = self.get_executable_path()
         system = platform.system()
+
+        # For macOS, we need the .app bundle path, not the executable inside
+        if system == "Darwin":
+            current_exe = self.get_app_bundle_path()
+        else:
+            current_exe = self.get_executable_path()
+
         extract_dir = os.path.join(tempfile.gettempdir(), "modscan_update")
 
         # Extract archive if needed
