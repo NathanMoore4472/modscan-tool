@@ -6,8 +6,8 @@ echo "Building ModScan Tool for macOS..."
 # Activate virtual environment
 source venv/bin/activate
 
-# Install PyInstaller if not already installed
-pip install pyinstaller pillow
+# Install PyInstaller and dependencies if not already installed
+pip install pyinstaller pillow certifi
 
 # Convert icon if it exists
 if [ -f "icon.png" ]; then
@@ -57,8 +57,32 @@ echo ""
 echo "Build complete!"
 echo "Application location: dist/ModScan Tool.app"
 echo ""
-echo "To create a DMG for distribution:"
-echo "  1. Create a folder called 'ModScan Tool Installer'"
-echo "  2. Copy 'dist/ModScan Tool.app' into it"
-echo "  3. Right-click the folder and select 'Compress'"
+
+# Create DMG
+echo "Creating DMG..."
+DMG_NAME="ModScan-Tool-macOS.dmg"
+DMG_TEMP="dist/dmg_temp"
+APP_NAME="ModScan Tool.app"
+
+# Remove old DMG if exists
+rm -f "dist/$DMG_NAME"
+
+# Create temporary directory for DMG contents
+mkdir -p "$DMG_TEMP"
+
+# Copy the app
+cp -R "dist/$APP_NAME" "$DMG_TEMP/"
+
+# Create DMG using hdiutil
+hdiutil create -volname "ModScan Tool" \
+    -srcfolder "$DMG_TEMP" \
+    -ov -format UDZO \
+    "dist/$DMG_NAME"
+
+# Clean up
+rm -rf "$DMG_TEMP"
+
+echo ""
+echo "DMG created successfully!"
+echo "Location: dist/$DMG_NAME"
 echo ""
