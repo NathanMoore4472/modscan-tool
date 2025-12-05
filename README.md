@@ -6,6 +6,8 @@ A modern, cross-platform GUI application for reading and monitoring Modbus TCP d
 ![Python](https://img.shields.io/badge/python-3.7+-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
+![](showcase_1.png)
+
 ## Features
 
 ### 📊 Comprehensive Data Type Support
