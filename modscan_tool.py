@@ -18,6 +18,7 @@ import os
 import tempfile
 import subprocess
 import shutil
+import multiprocessing
 from datetime import datetime
 
 # Import certifi for SSL certificate verification
@@ -26,6 +27,81 @@ try:
     HAS_CERTIFI = True
 except ImportError:
     HAS_CERTIFI = False
+
+
+def _macos_update_and_restart(app_path, new_app_path, temp_dir):
+    """Helper function for macOS update - must be at module level for multiprocessing"""
+    import time
+    import os
+    import shutil
+    import subprocess
+
+    # Create debug log
+    log_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'update_debug.txt')
+
+    def log(msg):
+        with open(log_path, 'a') as f:
+            f.write(f"{time.strftime('%H:%M:%S')} - {msg}\n")
+
+    log(f"Starting update process")
+    log(f"Current app path: {app_path}")
+    log(f"New app path: {new_app_path}")
+    log(f"Temp dir: {temp_dir}")
+
+    # Wait for app to quit
+    log("Waiting 5 seconds for app to quit...")
+    time.sleep(5)
+
+    # Replace the app bundle
+    try:
+        log(f"Checking if old app exists: {os.path.exists(app_path)}")
+        if os.path.exists(app_path):
+            log("Removing old app...")
+            shutil.rmtree(app_path)
+            log("Old app removed")
+
+        log(f"Checking if new app exists: {os.path.exists(new_app_path)}")
+        log("Moving new app to location...")
+        shutil.move(new_app_path, app_path)
+        log("New app moved successfully")
+
+        # Set permissions
+        log("Setting permissions...")
+        for root, dirs, files in os.walk(app_path):
+            for d in dirs:
+                try:
+                    os.chmod(os.path.join(root, d), 0o755)
+                except:
+                    pass
+            for f in files:
+                try:
+                    os.chmod(os.path.join(root, f), 0o755)
+                except:
+                    pass
+        log("Permissions set")
+
+        # Wait for filesystem
+        time.sleep(2)
+
+        # Launch the app
+        log(f"Launching app: {app_path}")
+        result = subprocess.call(['open', app_path])
+        log(f"Launch command result: {result}")
+
+    except Exception as e:
+        log(f"ERROR: {str(e)}")
+    finally:
+        # Clean up
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                log("Temp dir cleaned up")
+        except Exception as e:
+            log(f"Cleanup error: {str(e)}")
+
+    log("Update process complete")
+
+
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QProgressBar, QCheckBox, QGroupBox,
@@ -53,7 +129,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.8"
+        self.app_version = "1.1.7"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -301,6 +377,9 @@ class ModbusScannerGUI(QMainWindow):
         # Load auto-update check preference (default: True)
         self.check_updates_on_startup = self.settings.value("check_updates_on_startup", True, type=bool)
 
+        # Load update debug logging preference (default: False)
+        self.update_debug_logging = self.settings.value("update_debug_logging", False, type=bool)
+
     def save_settings(self):
         """Save current settings to QSettings"""
         # Save IP history (keep last 10 unique IPs)
@@ -343,6 +422,13 @@ class ModbusScannerGUI(QMainWindow):
         import_action = file_menu.addAction("Import from KEPServerEX...")
         import_action.triggered.connect(self.import_opf)
         import_action.setShortcut("Ctrl+I")
+
+        file_menu.addSeparator()
+
+        # Preferences action
+        prefs_action = file_menu.addAction("Preferences...")
+        prefs_action.triggered.connect(self.show_preferences_dialog)
+        prefs_action.setShortcut("Ctrl+,")
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -403,6 +489,53 @@ Built with Python, PyQt6, and pymodbus
         msg.setText(about_text)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
+
+    def show_preferences_dialog(self):
+        """Show the Preferences dialog"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Preferences")
+        dialog.setMinimumWidth(400)
+
+        layout = QVBoxLayout()
+
+        # Update Settings group
+        update_group = QGroupBox("Update Settings")
+        update_layout = QVBoxLayout()
+
+        # Checkbox for auto-update checking
+        check_startup_cb = QCheckBox("Check for updates on startup")
+        check_startup_cb.setChecked(self.check_updates_on_startup)
+        check_startup_cb.setToolTip("Automatically check for new versions when the application starts")
+        update_layout.addWidget(check_startup_cb)
+
+        # Checkbox for debug logging
+        debug_logging_cb = QCheckBox("Enable update debug logging")
+        debug_logging_cb.setChecked(self.update_debug_logging)
+        debug_logging_cb.setToolTip("Save detailed logs to Desktop when updating (for troubleshooting)")
+        update_layout.addWidget(debug_logging_cb)
+
+        update_group.setLayout(update_layout)
+        layout.addWidget(update_group)
+
+        # Dialog buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        dialog.setLayout(layout)
+
+        # If accepted, save the preferences
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.check_updates_on_startup = check_startup_cb.isChecked()
+            self.update_debug_logging = debug_logging_cb.isChecked()
+
+            # Save to QSettings
+            self.settings.setValue("check_updates_on_startup", self.check_updates_on_startup)
+            self.settings.setValue("update_debug_logging", self.update_debug_logging)
 
     def is_frozen(self):
         """Check if running as compiled executable"""
@@ -593,35 +726,108 @@ del "%~f0"
             subprocess.Popen(['cmd', '/c', updater_script], shell=False)
 
         elif system == "Darwin":
-            # For macOS, replace entire .app bundle
-            updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
+            # For macOS, use shell script (most reliable for frozen apps)
+            updater_script = os.path.expanduser('~/Desktop/modscan_updater.sh')
+
+            # Set up logging based on user preference
+            if self.update_debug_logging:
+                log_file = os.path.expanduser('~/Desktop/update_debug.txt')
+                log_redirect = f'exec > "{log_file}" 2>&1'
+                echo_cmd = "echo"
+            else:
+                log_redirect = '# Logging disabled'
+                echo_cmd = ": #"  # No-op command
+
             with open(updater_script, 'w') as f:
                 f.write(f"""#!/bin/bash
-# Wait for app to fully quit
+{log_redirect}
+{echo_cmd} "=== Update started at $(date) ==="
+{echo_cmd} "Current app: {current_exe}"
+{echo_cmd} "New app: {new_executable_path}"
+{echo_cmd} "Temp dir: {extract_dir}"
+{echo_cmd} ""
+
+# Wait for app to quit
+{echo_cmd} "Waiting for app to fully terminate..."
 sleep 3
 
-# Replace the app bundle
-rm -rf "{current_exe}"
-mv -f "{new_executable_path}" "{current_exe}"
-chmod -R +x "{current_exe}"
-
-# Wait a moment for filesystem to sync
-sleep 1
-
-# Launch the new version (detached from script)
-nohup open -a "{current_exe}" > /dev/null 2>&1 &
-
-# Clean up in background
+# Check if process is still running and wait for it to exit
+MAX_WAIT=30
+WAITED=0
+while pgrep -x "ModScan Tool" > /dev/null 2>&1; do
+    {echo_cmd} "  App still running, waiting... ($WAITED seconds)"
+    sleep 1
+    WAITED=$((WAITED + 1))
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        {echo_cmd} "  Timeout waiting for app to quit, forcing..."
+        pkill -9 "ModScan Tool"
+        sleep 2
+        break
+    fi
+done
+{echo_cmd} "App process terminated (waited $WAITED seconds)"
 sleep 2
+
+# Remove old app
+{echo_cmd} "Removing old app..."
+rm -rf "{current_exe}"
+{echo_cmd} "Old app removed"
+
+# Move new app
+{echo_cmd} "Moving new app..."
+mv "{new_executable_path}" "{current_exe}"
+{echo_cmd} "New app moved"
+
+# Set permissions and remove quarantine
+{echo_cmd} "Setting permissions..."
+chmod -R +x "{current_exe}"
+{echo_cmd} "Removing quarantine attributes..."
+xattr -cr "{current_exe}" 2>&1
+{echo_cmd} "Permissions and attributes set"
+
+# Wait
+sleep 2
+
+# Launch - use AppleScript which runs in GUI context
+{echo_cmd} "Launching app using AppleScript..."
+
+osascript <<EOF
+tell application "Finder"
+    open POSIX file "{current_exe}"
+    activate
+end tell
+EOF
+
+RESULT=$?
+{echo_cmd} "AppleScript launch result: $RESULT"
+
+sleep 2
+
+# Check if app is running
+{echo_cmd} "Checking if app is running..."
+if ps aux | grep "ModScan Tool" | grep -v grep > /dev/null; then
+    {echo_cmd} "✓ App is running!"
+else
+    {echo_cmd} "✗ App is not running"
+fi
+{echo_cmd} "Process check done"
+
+# Cleanup
+sleep 2
+{echo_cmd} "Cleaning up..."
 rm -rf "{extract_dir}"
 rm -f "$0"
+{echo_cmd} "Done at $(date)"
 """)
             os.chmod(updater_script, 0o755)
-            # Run script in completely detached process
+
+            # Execute the script in background
             subprocess.Popen(['/bin/bash', updater_script],
+                           stdin=subprocess.DEVNULL,
                            stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL,
-                           start_new_session=True)
+                           start_new_session=True,
+                           close_fds=True)
 
         elif system == "Linux":
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
