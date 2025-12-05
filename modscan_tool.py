@@ -53,7 +53,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.7"
+        self.app_version = "1.1.8"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -597,19 +597,31 @@ del "%~f0"
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
             with open(updater_script, 'w') as f:
                 f.write(f"""#!/bin/bash
-sleep 2
+# Wait for app to fully quit
+sleep 3
+
+# Replace the app bundle
 rm -rf "{current_exe}"
 mv -f "{new_executable_path}" "{current_exe}"
 chmod -R +x "{current_exe}"
+
+# Wait a moment for filesystem to sync
 sleep 1
-open -a "{current_exe}"
+
+# Launch the new version (detached from script)
+nohup open -a "{current_exe}" > /dev/null 2>&1 &
+
+# Clean up in background
+sleep 2
 rm -rf "{extract_dir}"
-rm "$0"
+rm -f "$0"
 """)
             os.chmod(updater_script, 0o755)
+            # Run script in completely detached process
             subprocess.Popen(['/bin/bash', updater_script],
                            stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+                           stderr=subprocess.DEVNULL,
+                           start_new_session=True)
 
         elif system == "Linux":
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
