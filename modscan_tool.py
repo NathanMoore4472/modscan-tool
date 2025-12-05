@@ -432,6 +432,11 @@ Built with Python, PyQt6, and pymodbus
                     show_item = True
 
             item.setHidden(not show_item)
+
+            # If this is a child item (bit row) that matches, also show its parent
+            if show_item and item.parent():
+                item.parent().setHidden(False)
+
             iterator += 1
 
     def clear_filter(self):
