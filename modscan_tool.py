@@ -12,12 +12,20 @@ import time
 import json
 import urllib.request
 import urllib.error
+import ssl
 import platform
 import os
 import tempfile
 import subprocess
 import shutil
 from datetime import datetime
+
+# Import certifi for SSL certificate verification
+try:
+    import certifi
+    HAS_CERTIFI = True
+except ImportError:
+    HAS_CERTIFI = False
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
                              QTextEdit, QProgressBar, QCheckBox, QGroupBox,
@@ -45,7 +53,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.3"
+        self.app_version = "1.1.4"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -426,7 +434,13 @@ Built with Python, PyQt6, and pymodbus
             req = urllib.request.Request(url)
             req.add_header('User-Agent', 'ModScan-Tool')
 
-            with urllib.request.urlopen(req, timeout=5) as response:
+            # Create SSL context with certifi certificates if available
+            if HAS_CERTIFI:
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+            else:
+                ssl_context = ssl.create_default_context()
+
+            with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
                 data = json.loads(response.read().decode())
                 latest_version = data.get('tag_name', '').lstrip('v')
                 release_url = data.get('html_url', '')
@@ -488,7 +502,13 @@ Built with Python, PyQt6, and pymodbus
             req.add_header('User-Agent', 'ModScan-Tool')
             req.add_header('Accept', 'application/octet-stream')
 
-            with urllib.request.urlopen(req) as response:
+            # Create SSL context with certifi certificates if available
+            if HAS_CERTIFI:
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+            else:
+                ssl_context = ssl.create_default_context()
+
+            with urllib.request.urlopen(req, context=ssl_context) as response:
                 with open(download_path, 'wb') as f:
                     f.write(response.read())
 
