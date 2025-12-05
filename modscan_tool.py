@@ -53,7 +53,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.6"
+        self.app_version = "1.1.7"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -601,12 +601,15 @@ sleep 2
 rm -rf "{current_exe}"
 mv -f "{new_executable_path}" "{current_exe}"
 chmod -R +x "{current_exe}"
-open "{current_exe}"
+sleep 1
+open -a "{current_exe}"
 rm -rf "{extract_dir}"
 rm "$0"
 """)
             os.chmod(updater_script, 0o755)
-            subprocess.Popen(['/bin/bash', updater_script])
+            subprocess.Popen(['/bin/bash', updater_script],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
 
         elif system == "Linux":
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
