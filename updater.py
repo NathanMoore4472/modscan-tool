@@ -14,6 +14,7 @@ import os
 import tempfile
 import subprocess
 import shutil
+import re
 
 # Import certifi for SSL certificate verification
 try:
@@ -22,7 +23,9 @@ try:
 except ImportError:
     HAS_CERTIFI = False
 
-from PyQt6.QtWidgets import QMessageBox, QCheckBox, QApplication
+from PyQt6.QtWidgets import (QMessageBox, QCheckBox, QApplication, QDialog,
+                             QVBoxLayout, QHBoxLayout, QLabel, QTextBrowser,
+                             QPushButton, QDialogButtonBox)
 from PyQt6.QtCore import Qt
 
 
@@ -214,11 +217,70 @@ class UpdateChecker:
         except:
             return False
 
+    def _markdown_to_html(self, markdown_text):
+        """Convert basic markdown to HTML for release notes"""
+        if not markdown_text:
+            return ""
+
+        html = markdown_text
+
+        # Escape HTML special characters first (but preserve for conversion)
+        # html = html.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        # Convert headers (### Header -> <h3>Header</h3>)
+        html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+        html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+        html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+
+        # Convert bold (**text** or __text__)
+        html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html)
+        html = re.sub(r'__(.+?)__', r'<b>\1</b>', html)
+
+        # Convert italic (*text* or _text_) - but not inside words
+        html = re.sub(r'\*([^\*]+?)\*', r'<i>\1</i>', html)
+        html = re.sub(r'(?<!\w)_([^_]+?)_(?!\w)', r'<i>\1</i>', html)
+
+        # Convert links [text](url)
+        html = re.sub(r'\[([^\]]+)\]\(([^\)]+)\)', r'<a href="\2">\1</a>', html)
+
+        # Convert inline code `code`
+        html = re.sub(r'`([^`]+)`', r'<code style="background-color: #f0f0f0; padding: 2px 4px; border-radius: 3px;">\1</code>', html)
+
+        # Convert unordered lists (- item or * item)
+        lines = html.split('\n')
+        in_list = False
+        result_lines = []
+
+        for line in lines:
+            # Check if line is a list item
+            if re.match(r'^[\s]*[-*]\s+(.+)$', line):
+                list_item = re.sub(r'^[\s]*[-*]\s+(.+)$', r'\1', line)
+                if not in_list:
+                    result_lines.append('<ul>')
+                    in_list = True
+                result_lines.append(f'<li>{list_item}</li>')
+            else:
+                if in_list:
+                    result_lines.append('</ul>')
+                    in_list = False
+                result_lines.append(line)
+
+        if in_list:
+            result_lines.append('</ul>')
+
+        html = '\n'.join(result_lines)
+
+        # Convert line breaks to <br> for paragraphs
+        html = re.sub(r'\n\n+', '</p><p>', html)
+
+        # Wrap in paragraph if not already wrapped
+        if not html.startswith('<'):
+            html = f'<p>{html}</p>'
+
+        return html
+
     def show_update_dialog(self, version, url, notes, assets=None):
         """Show dialog notifying user of available update"""
-        if len(notes) > 300:
-            notes = notes[:300] + "..."
-
         asset_name = self.get_platform_asset_name()
         asset_url = None
 
@@ -229,41 +291,85 @@ class UpdateChecker:
                     asset_url = asset.get('browser_download_url')
                     break
 
-        message = f"""
-<h3>Update Available!</h3>
+        # Create custom dialog
+        dialog = QDialog(self.parent)
+        dialog.setWindowTitle("Update Available")
+        dialog.setMinimumWidth(600)
+        dialog.setMinimumHeight(500)
+
+        layout = QVBoxLayout()
+
+        # Header with version info
+        header_html = f"""
+<h2>Update Available!</h2>
 <p>A new version of ModScan Tool is available.</p>
-<p><b>Current Version:</b> {self.app_version}<br>
-<b>Latest Version:</b> {version}</p>
-
-<p><b>Release Notes:</b></p>
-<p style="font-size: small;">{notes if notes else 'No release notes available.'}</p>
+<table style="margin-top: 10px;">
+<tr><td><b>Current Version:</b></td><td>{self.app_version}</td></tr>
+<tr><td><b>Latest Version:</b></td><td>{version}</td></tr>
+</table>
 """
+        header_label = QLabel(header_html)
+        header_label.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(header_label)
 
+        # Release notes section header
+        notes_header = QLabel("<b>Release Notes:</b>")
+        layout.addWidget(notes_header)
+
+        # Scrollable text browser for release notes
+        text_browser = QTextBrowser()
+        text_browser.setOpenExternalLinks(True)  # Allow clicking links
+
+        # Convert markdown to HTML
+        formatted_notes = self._markdown_to_html(notes if notes else 'No release notes available.')
+        text_browser.setHtml(formatted_notes)
+
+        layout.addWidget(text_browser)
+
+        # Note for non-frozen executables
         if not self.is_frozen():
-            message += """
-<p><b>Note:</b> Auto-install is only available for compiled executables. Please download manually:</p>
-"""
+            note_label = QLabel('<p style="color: #666;"><i>Note: Auto-install is only available for compiled executables.</i></p>')
+            note_label.setTextFormat(Qt.TextFormat.RichText)
+            layout.addWidget(note_label)
 
-        msg = QMessageBox(self.parent)
-        msg.setWindowTitle("Update Available")
-        msg.setTextFormat(Qt.TextFormat.RichText)
-        msg.setText(message)
-
-        # Add checkbox for disabling startup checks
+        # Checkbox for disabling startup checks
         checkbox = QCheckBox("Don't check for updates on startup")
-        msg.setCheckBox(checkbox)
+        layout.addWidget(checkbox)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
 
         # Add appropriate buttons based on whether we can auto-install
         if self.is_frozen() and asset_url:
-            download_btn = msg.addButton("Download && Install", QMessageBox.ButtonRole.AcceptRole)
-            manual_btn = msg.addButton("Manual Download", QMessageBox.ButtonRole.RejectRole)
-            cancel_btn = msg.addButton("Later", QMessageBox.ButtonRole.RejectRole)
-        else:
-            download_btn = msg.addButton("Download", QMessageBox.ButtonRole.AcceptRole)
-            cancel_btn = msg.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+            download_install_btn = QPushButton("Download && Install")
+            download_install_btn.setDefault(True)
+            manual_btn = QPushButton("Manual Download")
+            later_btn = QPushButton("Later")
 
-        result = msg.exec()
-        clicked = msg.clickedButton()
+            button_layout.addWidget(download_install_btn)
+            button_layout.addWidget(manual_btn)
+            button_layout.addWidget(later_btn)
+
+            download_install_btn.clicked.connect(dialog.accept)
+            manual_btn.clicked.connect(lambda: dialog.done(2))
+            later_btn.clicked.connect(dialog.reject)
+        else:
+            download_btn = QPushButton("Download")
+            download_btn.setDefault(True)
+            later_btn = QPushButton("Later")
+
+            button_layout.addWidget(download_btn)
+            button_layout.addWidget(later_btn)
+
+            download_btn.clicked.connect(dialog.accept)
+            later_btn.clicked.connect(dialog.reject)
+
+        layout.addLayout(button_layout)
+        dialog.setLayout(layout)
+
+        # Show dialog and handle result
+        result = dialog.exec()
 
         # Save checkbox state
         if checkbox.isChecked():
@@ -271,15 +377,15 @@ class UpdateChecker:
             self.settings.setValue("check_updates_on_startup", False)
 
         # Handle button clicks
-        if clicked == download_btn and self.is_frozen() and asset_url:
-            # Download and install
-            self.download_update(asset_url)
-        elif clicked == download_btn or (not self.is_frozen() and clicked == download_btn):
-            # Open browser to download page
-            import webbrowser
-            webbrowser.open(url)
-        elif hasattr(locals(), 'manual_btn') and clicked == manual_btn:
-            # Open browser to download page
+        if result == QDialog.DialogCode.Accepted:
+            if self.is_frozen() and asset_url:
+                # Download and install
+                self.download_update(asset_url)
+            else:
+                # Open browser to download page
+                import webbrowser
+                webbrowser.open(url)
+        elif result == 2:  # Manual download button
             import webbrowser
             webbrowser.open(url)
 

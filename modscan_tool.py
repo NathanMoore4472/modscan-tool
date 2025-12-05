@@ -39,7 +39,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.7"
+        self.app_version = "1.2.0"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -336,6 +336,7 @@ class ModbusScannerGUI(QMainWindow):
         prefs_action = file_menu.addAction("Preferences...")
         prefs_action.triggered.connect(self.show_preferences_dialog)
         prefs_action.setShortcut("Ctrl+,")
+        prefs_action.setMenuRole(prefs_action.MenuRole.NoRole)  # Keep in File menu on macOS
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -349,6 +350,7 @@ class ModbusScannerGUI(QMainWindow):
         # About action
         about_action = help_menu.addAction("About ModScan Tool")
         about_action.triggered.connect(self.show_about_dialog)
+        about_action.setMenuRole(about_action.MenuRole.NoRole)  # Keep in Help menu on macOS
 
     def show_about_dialog(self):
         """Show the About dialog with version and info"""
