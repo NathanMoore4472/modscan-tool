@@ -1,6 +1,6 @@
 # ModScan Tool
 
-A modern, cross-platform GUI application for reading and monitoring Modbus TCP devices. Built with Python and PyQt6.
+A modern, cross-platform GUI application for reading and monitoring Modbus TCP devices. Built ontop of pymodbus with PyQt6 and PyInstaller.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.7+-green)
