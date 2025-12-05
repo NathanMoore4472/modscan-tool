@@ -9,6 +9,14 @@ import threading
 import ipaddress
 import struct
 import time
+import json
+import urllib.request
+import urllib.error
+import platform
+import os
+import tempfile
+import subprocess
+import shutil
 from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -37,7 +45,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.0"
+        self.app_version = "1.1.2"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -61,6 +69,11 @@ class ModbusScannerGUI(QMainWindow):
         self.init_ui()
         self.create_menu_bar()
         self.load_settings()
+
+        # Check for updates on startup if enabled
+        if self.check_updates_on_startup:
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(1000, lambda: self.check_for_updates(silent=True))
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -277,6 +290,9 @@ class ModbusScannerGUI(QMainWindow):
                 self.ip_combo.addItem(ip)
             self.ip_combo.setCurrentIndex(0)
 
+        # Load auto-update check preference (default: True)
+        self.check_updates_on_startup = self.settings.value("check_updates_on_startup", True, type=bool)
+
     def save_settings(self):
         """Save current settings to QSettings"""
         # Save IP history (keep last 10 unique IPs)
@@ -322,6 +338,12 @@ class ModbusScannerGUI(QMainWindow):
 
         # Help menu
         help_menu = menubar.addMenu("Help")
+
+        # Check for Updates action
+        update_action = help_menu.addAction("Check for Updates...")
+        update_action.triggered.connect(lambda: self.check_for_updates(silent=False))
+
+        help_menu.addSeparator()
 
         # About action
         about_action = help_menu.addAction("About ModScan Tool")
@@ -372,6 +394,227 @@ Built with Python, PyQt6, and pymodbus
         msg.setText(about_text)
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
+
+    def is_frozen(self):
+        """Check if running as compiled executable"""
+        return getattr(sys, 'frozen', False)
+
+    def get_platform_asset_name(self):
+        """Get the asset name for the current platform"""
+        system = platform.system()
+        if system == "Windows":
+            return "ModScan-Tool-Windows.exe"
+        elif system == "Darwin":  # macOS
+            return "ModScan-Tool-macOS.dmg"
+        elif system == "Linux":
+            return "ModScan-Tool-Linux.tar.gz"
+        else:
+            return None
+
+    def get_executable_path(self):
+        """Get the path to the current executable"""
+        if self.is_frozen():
+            return sys.executable
+        else:
+            return os.path.abspath(__file__)
+
+    def check_for_updates(self, silent=False):
+        """Check for updates from GitHub releases"""
+        try:
+            url = "https://api.github.com/repos/NathanMoore4472/modscan-tool/releases/latest"
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'ModScan-Tool')
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                latest_version = data.get('tag_name', '').lstrip('v')
+                release_url = data.get('html_url', '')
+                release_notes = data.get('body', '')
+                assets = data.get('assets', [])
+
+                current_version = self.app_version
+
+                if latest_version and self.is_newer_version(latest_version, current_version):
+                    self.show_update_dialog(latest_version, release_url, release_notes, assets)
+                elif not silent:
+                    QMessageBox.information(
+                        self,
+                        "No Updates Available",
+                        f"You are running the latest version ({current_version})."
+                    )
+
+        except urllib.error.URLError as e:
+            if not silent:
+                QMessageBox.warning(
+                    self,
+                    "Update Check Failed",
+                    f"Could not check for updates:\n{str(e)}\n\nPlease check your internet connection."
+                )
+        except Exception as e:
+            if not silent:
+                QMessageBox.warning(
+                    self,
+                    "Update Check Failed",
+                    f"An error occurred while checking for updates:\n{str(e)}"
+                )
+
+    def is_newer_version(self, latest, current):
+        """Compare version strings"""
+        try:
+            latest_parts = [int(x) for x in latest.split('.')]
+            current_parts = [int(x) for x in current.split('.')]
+            max_len = max(len(latest_parts), len(current_parts))
+            latest_parts += [0] * (max_len - len(latest_parts))
+            current_parts += [0] * (max_len - len(current_parts))
+            return latest_parts > current_parts
+        except:
+            return False
+
+    def download_and_install_update(self, asset_url, asset_name):
+        """Download and install the update"""
+        try:
+            progress = QMessageBox(self)
+            progress.setWindowTitle("Downloading Update")
+            progress.setText(f"Downloading {asset_name}...")
+            progress.setStandardButtons(QMessageBox.StandardButton.NoButton)
+            progress.show()
+            QApplication.processEvents()
+
+            temp_dir = tempfile.mkdtemp()
+            download_path = os.path.join(temp_dir, asset_name)
+
+            req = urllib.request.Request(asset_url)
+            req.add_header('User-Agent', 'ModScan-Tool')
+            req.add_header('Accept', 'application/octet-stream')
+
+            with urllib.request.urlopen(req) as response:
+                with open(download_path, 'wb') as f:
+                    f.write(response.read())
+
+            progress.close()
+
+            if platform.system() != "Windows":
+                os.chmod(download_path, 0o755)
+
+            self.install_update(download_path)
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Download Failed",
+                f"Failed to download update:\n{str(e)}"
+            )
+
+    def install_update(self, new_executable_path):
+        """Install the downloaded update and restart"""
+        current_exe = self.get_executable_path()
+        system = platform.system()
+
+        if system == "Windows":
+            updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.bat")
+            with open(updater_script, 'w') as f:
+                f.write(f"""@echo off
+timeout /t 2 /nobreak > nul
+move /y "{new_executable_path}" "{current_exe}"
+start "" "{current_exe}"
+del "%~f0"
+""")
+            subprocess.Popen(['cmd', '/c', updater_script], shell=False)
+
+        elif system == "Darwin":
+            updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
+            with open(updater_script, 'w') as f:
+                f.write(f"""#!/bin/bash
+sleep 2
+mv -f "{new_executable_path}" "{current_exe}"
+chmod +x "{current_exe}"
+open "{current_exe}"
+rm "$0"
+""")
+            os.chmod(updater_script, 0o755)
+            subprocess.Popen(['/bin/bash', updater_script])
+
+        elif system == "Linux":
+            updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
+            with open(updater_script, 'w') as f:
+                f.write(f"""#!/bin/bash
+sleep 2
+mv -f "{new_executable_path}" "{current_exe}"
+chmod +x "{current_exe}"
+"{current_exe}" &
+rm "$0"
+""")
+            os.chmod(updater_script, 0o755)
+            subprocess.Popen(['/bin/bash', updater_script])
+
+        QApplication.quit()
+
+    def show_update_dialog(self, version, url, notes, assets=None):
+        """Show dialog notifying user of available update"""
+        if len(notes) > 300:
+            notes = notes[:300] + "..."
+
+        asset_name = self.get_platform_asset_name()
+        asset_url = None
+
+        # Only look for assets if running as frozen executable
+        if self.is_frozen() and assets and asset_name:
+            for asset in assets:
+                if asset.get('name') == asset_name:
+                    asset_url = asset.get('browser_download_url')
+                    break
+
+        message = f"""
+<h3>Update Available!</h3>
+<p>A new version of ModScan Tool is available.</p>
+<p><b>Current Version:</b> {self.app_version}<br>
+<b>Latest Version:</b> {version}</p>
+
+<p><b>Release Notes:</b></p>
+<p style="font-size: small;">{notes if notes else 'No release notes available.'}</p>
+"""
+
+        if not self.is_frozen():
+            message += """
+<p><b>Note:</b> Auto-install is only available for compiled executables. Please download manually:</p>
+"""
+
+        if not asset_url or not self.is_frozen():
+            message += f"""
+<p>Visit the release page to download:</p>
+<p><a href="{url}">{url}</a></p>
+"""
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Update Available")
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setText(message)
+        msg.setIcon(QMessageBox.Icon.Information)
+
+        checkbox = QCheckBox("Don't check for updates automatically on startup")
+        msg.setCheckBox(checkbox)
+
+        # Only show Download & Install if frozen and asset found
+        if self.is_frozen() and asset_url:
+            download_btn = msg.addButton("Download && Install", QMessageBox.ButtonRole.AcceptRole)
+            manual_btn = msg.addButton("Manual Download", QMessageBox.ButtonRole.RejectRole)
+            cancel_btn = msg.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        else:
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+
+        result = msg.exec()
+
+        if checkbox.isChecked():
+            self.check_updates_on_startup = False
+            self.settings.setValue("check_updates_on_startup", False)
+
+        # Handle button clicks
+        if self.is_frozen() and asset_url:
+            if msg.clickedButton() == download_btn:
+                self.download_and_install_update(asset_url, asset_name)
+            elif msg.clickedButton() == manual_btn:
+                import webbrowser
+                webbrowser.open(url)
 
     def log_message(self, message, tag):
         """Display a log message in the info label"""
