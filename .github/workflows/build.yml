@@ -34,7 +34,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller pillow
+        pip install pyinstaller pillow certifi
 
     - name: Build for macOS
       if: matrix.os == 'macos-latest'
@@ -67,10 +67,15 @@ jobs:
           $ICON_ARG \
           modscan_tool.py
 
-        # Create DMG for distribution
+        # Create DMG for manual distribution
         mkdir -p "dist/dmg"
         cp -r "dist/ModScan Tool.app" "dist/dmg/"
         hdiutil create -volname "ModScan Tool" -srcfolder "dist/dmg" -ov -format UDZO "dist/ModScan-Tool-macOS.dmg"
+
+        # Create ZIP for auto-updater
+        cd dist
+        zip -r -q "ModScan-Tool-macOS.zip" "ModScan Tool.app"
+        cd ..
 
     - name: Build for Windows
       if: matrix.os == 'windows-latest'
@@ -124,6 +129,7 @@ jobs:
         path: |
           dist/ModScan Tool.app
           dist/ModScan-Tool-macOS.dmg
+          dist/ModScan-Tool-macOS.zip
 
     - name: Upload Windows artifact
       if: matrix.os == 'windows-latest'
@@ -144,7 +150,9 @@ jobs:
       if: github.event_name == 'release' && matrix.os == 'macos-latest'
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/ModScan-Tool-macOS.dmg
+        files: |
+          dist/ModScan-Tool-macOS.dmg
+          dist/ModScan-Tool-macOS.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
