@@ -45,7 +45,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.1.2"
+        self.app_version = "1.1.3"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -365,6 +365,7 @@ class ModbusScannerGUI(QMainWindow):
 
 <h3>About</h3>
 <p>A modern, cross-platform GUI application for reading and monitoring Modbus TCP devices.</p>
+<p><i>Features automatic update checking to keep you up to date!</i></p>
 
 <h3>Dependencies</h3>
 <ul>
