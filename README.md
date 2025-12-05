@@ -60,7 +60,7 @@ View register values in 8 different formats simultaneously:
 
 ### Option 1: Download Pre-built Executable (Recommended)
 
-Download the latest release for your platform:
+Download the latest [release](https://github.com/NathanMoore4472/modscan-tool/releases) for your platform:
 - **macOS**: `ModScan-Tool-macOS.dmg`
 - **Windows**: `ModScan-Tool-Windows.exe`
 - **Linux**: `ModScan-Tool-Linux.tar.gz`
@@ -252,24 +252,20 @@ This tool is intended for authorized network scanning and device communication o
 - Check register addresses in device documentation
 - Some registers may not exist in the range
 
-### macOS: "App can't be opened because it is from an unidentified developer"
+### macOS: "ModScan Tool” Not Opened"
 
-When you first try to open the app, macOS Gatekeeper may block it because it's not signed with an Apple Developer certificate. To allow the app to run:
+When you first try to open the app, macOS may block it. To allow the app to run:
 
 **Option 1: Using System Settings (Recommended)**
 1. Try to open the app (you'll get the blocked message)
 2. Open **System Settings** → **Privacy & Security**
 3. Scroll down to the **Security** section
-4. You'll see a message: "ModScan Tool was blocked from use because it is not from an identified developer"
+4. You'll see a message: "ModScan Tool" was blocked to protect your Mac.
 5. Click **Open Anyway**
-6. Confirm by clicking **Open** in the dialog
+6. Confirm by clicking **Open Anway** again in the dialog
+7. The app should now open
 
-**Option 2: Using Right-Click (Quick Method)**
-1. Right-click (or Control-click) on "ModScan Tool.app"
-2. Select **Open** from the menu
-3. Click **Open** in the confirmation dialog
-
-**Option 3: Remove Quarantine Attribute (Terminal)**
+**Option 2: Remove Quarantine Attribute (Terminal)**
 ```bash
 xattr -cr "/Applications/ModScan Tool.app"
 ```
