@@ -12,13 +12,34 @@ import time
 from datetime import datetime
 
 from updater import UpdateChecker
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QTextEdit, QProgressBar, QCheckBox, QGroupBox,
-                             QMessageBox, QFileDialog, QRadioButton, QButtonGroup,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
-                             QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
-                             QAbstractItemView, QDialog, QDialogButtonBox)
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QProgressBar,
+    QCheckBox,
+    QGroupBox,
+    QMessageBox,
+    QFileDialog,
+    QRadioButton,
+    QButtonGroup,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QComboBox,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QTreeWidgetItemIterator,
+    QAbstractItemView,
+    QDialog,
+    QDialogButtonBox,
+)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QSettings
 from PyQt6.QtGui import QTextCursor, QColor, QTextCharFormat
 from pymodbus.client import ModbusTcpClient
@@ -29,6 +50,7 @@ from opf_parser import parse_opf_file
 
 class WorkerSignals(QObject):
     """Signals for thread-safe communication"""
+
     log = pyqtSignal(str, str)  # message, tag
     status = pyqtSignal(str)
     progress = pyqtSignal(int)
@@ -39,7 +61,7 @@ class WorkerSignals(QObject):
 class ModbusScannerGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.app_version = "1.2.0"
+        self.app_version = "1.3.0"
         self.setWindowTitle("ModScan Tool")
         self.setGeometry(100, 100, 1050, 750)
 
@@ -68,9 +90,12 @@ class ModbusScannerGUI(QMainWindow):
         self.load_settings()
 
         # Check for updates on startup if enabled
-        print(f"Update check on startup enabled: {self.updater.check_updates_on_startup}")
+        print(
+            f"Update check on startup enabled: {self.updater.check_updates_on_startup}"
+        )
         if self.updater.check_updates_on_startup:
             from PyQt6.QtCore import QTimer
+
             print("Scheduling update check in 1 second...")
             QTimer.singleShot(1000, lambda: self.updater.check_for_updates(silent=True))
 
@@ -190,23 +215,31 @@ class ModbusScannerGUI(QMainWindow):
 
         self.scan_button = QPushButton("Read Registers")
         self.scan_button.clicked.connect(self.start_scan)
-        self.scan_button.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
+        self.scan_button.setStyleSheet(
+            "background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;"
+        )
         button_layout.addWidget(self.scan_button)
 
         self.stop_button = QPushButton("Stop")
         self.stop_button.clicked.connect(self.stop_scan)
         self.stop_button.setEnabled(False)
-        self.stop_button.setStyleSheet("background-color: #f44336; color: white; font-weight: bold; padding: 8px;")
+        self.stop_button.setStyleSheet(
+            "background-color: #f44336; color: white; font-weight: bold; padding: 8px;"
+        )
         button_layout.addWidget(self.stop_button)
 
         self.clear_button = QPushButton("Clear Results")
         self.clear_button.clicked.connect(self.clear_results)
-        self.clear_button.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px;")
+        self.clear_button.setStyleSheet(
+            "background-color: #2196F3; color: white; font-weight: bold; padding: 8px;"
+        )
         button_layout.addWidget(self.clear_button)
 
         self.export_button = QPushButton("Export Results")
         self.export_button.clicked.connect(self.export_results)
-        self.export_button.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; padding: 8px;")
+        self.export_button.setStyleSheet(
+            "background-color: #FF9800; color: white; font-weight: bold; padding: 8px;"
+        )
         button_layout.addWidget(self.export_button)
 
         layout.addLayout(button_layout)
@@ -219,8 +252,13 @@ class ModbusScannerGUI(QMainWindow):
 
         # Status Label
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("background-color: #90EE90; padding: 5px; font-weight: bold;")
-        self.status_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.status_label.setStyleSheet(
+            "background-color: #90EE90; padding: 5px; font-weight: bold;"
+        )
+        self.status_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         layout.addWidget(self.status_label)
 
         # Results Table
@@ -228,8 +266,13 @@ class ModbusScannerGUI(QMainWindow):
         results_layout = QVBoxLayout()
 
         # Info label
-        self.info_label = QLabel("Ready to read. Configure connection and register range above, then click 'Read Registers'.")
-        self.info_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.info_label = QLabel(
+            "Ready to read. Configure connection and register range above, then click 'Read Registers'."
+        )
+        self.info_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
         results_layout.addWidget(self.info_label)
 
         # Search/Filter section
@@ -237,9 +280,21 @@ class ModbusScannerGUI(QMainWindow):
         filter_layout.addWidget(QLabel("Filter:"))
 
         self.filter_column_combo = QComboBox()
-        self.filter_column_combo.addItems([
-            "All Columns", "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
-        ])
+        self.filter_column_combo.addItems(
+            [
+                "All Columns",
+                "Address",
+                "Tag Name",
+                "Hex",
+                "Binary",
+                "Uint16",
+                "Int16",
+                "Uint32",
+                "Int32",
+                "Float32",
+                "String",
+            ]
+        )
         self.filter_column_combo.setMaximumWidth(120)
         filter_layout.addWidget(self.filter_column_combo)
 
@@ -259,9 +314,20 @@ class ModbusScannerGUI(QMainWindow):
         # Create tree widget (replaces table for expandable bit rows)
         self.results_table = QTreeWidget()
         self.results_table.setColumnCount(10)
-        self.results_table.setHeaderLabels([
-            "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
-        ])
+        self.results_table.setHeaderLabels(
+            [
+                "Address",
+                "Tag Name",
+                "Hex",
+                "Binary",
+                "Uint16",
+                "Int16",
+                "Uint32",
+                "Int32",
+                "Float32",
+                "String",
+            ]
+        )
 
         # Configure tree widget
         header = self.results_table.header()
@@ -338,31 +404,38 @@ class ModbusScannerGUI(QMainWindow):
         prefs_action = file_menu.addAction("Preferences...")
         prefs_action.triggered.connect(self.show_preferences_dialog)
         prefs_action.setShortcut("Ctrl+,")
-        prefs_action.setMenuRole(prefs_action.MenuRole.NoRole)  # Keep in File menu on macOS
+        prefs_action.setMenuRole(
+            prefs_action.MenuRole.NoRole
+        )  # Keep in File menu on macOS
 
         # Help menu
         help_menu = menubar.addMenu("Help")
 
         # Check for Updates action
         update_action = help_menu.addAction("Check for Updates...")
-        update_action.triggered.connect(lambda: self.updater.check_for_updates(silent=False))
+        update_action.triggered.connect(
+            lambda: self.updater.check_for_updates(silent=False)
+        )
 
         help_menu.addSeparator()
 
         # About action
         about_action = help_menu.addAction("About ModScan Tool")
         about_action.triggered.connect(self.show_about_dialog)
-        about_action.setMenuRole(about_action.MenuRole.NoRole)  # Keep in Help menu on macOS
+        about_action.setMenuRole(
+            about_action.MenuRole.NoRole
+        )  # Keep in Help menu on macOS
 
     def show_about_dialog(self):
         """Show the About dialog with version and info"""
-        pymodbus_version = getattr(pymodbus, '__version__', 'unknown')
+        pymodbus_version = getattr(pymodbus, "__version__", "unknown")
 
         try:
             from PyQt6 import QtCore
+
             pyqt_version = QtCore.PYQT_VERSION_STR
         except:
-            pyqt_version = 'unknown'
+            pyqt_version = "unknown"
 
         about_text = f"""
 <h2>ModScan Tool</h2>
@@ -416,13 +489,17 @@ Built with Python, PyQt6, and pymodbus
         # Checkbox for auto-update checking
         check_startup_cb = QCheckBox("Check for updates on startup")
         check_startup_cb.setChecked(self.updater.check_updates_on_startup)
-        check_startup_cb.setToolTip("Automatically check for new versions when the application starts")
+        check_startup_cb.setToolTip(
+            "Automatically check for new versions when the application starts"
+        )
         update_layout.addWidget(check_startup_cb)
 
         # Checkbox for debug logging
         debug_logging_cb = QCheckBox("Enable update debug logging")
         debug_logging_cb.setChecked(self.updater.update_debug_logging)
-        debug_logging_cb.setToolTip("Save detailed logs to Desktop when updating (for troubleshooting)")
+        debug_logging_cb.setToolTip(
+            "Save detailed logs to Desktop when updating (for troubleshooting)"
+        )
         update_layout.addWidget(debug_logging_cb)
 
         update_group.setLayout(update_layout)
@@ -430,8 +507,7 @@ Built with Python, PyQt6, and pymodbus
 
         # Dialog buttons
         button_box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok |
-            QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
@@ -445,8 +521,12 @@ Built with Python, PyQt6, and pymodbus
             self.updater.update_debug_logging = debug_logging_cb.isChecked()
 
             # Save to QSettings
-            self.settings.setValue("check_updates_on_startup", self.updater.check_updates_on_startup)
-            self.settings.setValue("update_debug_logging", self.updater.update_debug_logging)
+            self.settings.setValue(
+                "check_updates_on_startup", self.updater.check_updates_on_startup
+            )
+            self.settings.setValue(
+                "update_debug_logging", self.updater.update_debug_logging
+            )
 
     def log_message(self, message, tag):
         """Display a log message in the info label"""
@@ -479,7 +559,9 @@ Built with Python, PyQt6, and pymodbus
     def filter_table(self):
         """Filter tree items based on search criteria"""
         filter_text = self.filter_entry.text().lower()
-        column_index = self.filter_column_combo.currentIndex() - 1  # -1 because first item is "All Columns"
+        column_index = (
+            self.filter_column_combo.currentIndex() - 1
+        )  # -1 because first item is "All Columns"
 
         if not filter_text:
             # Show all items if filter is empty
@@ -543,19 +625,25 @@ Built with Python, PyQt6, and pymodbus
             # Validate based on addressing mode
             if zero_based:
                 if start_reg < 0 or start_reg > 65535:
-                    raise ValueError("Start register must be between 0 and 65535 (0-based)")
+                    raise ValueError(
+                        "Start register must be between 0 and 65535 (0-based)"
+                    )
             else:
                 if start_reg < 1 or start_reg > 65536:
-                    raise ValueError("Start register must be between 1 and 65536 (1-based)")
+                    raise ValueError(
+                        "Start register must be between 1 and 65536 (1-based)"
+                    )
 
             reg_count = int(self.register_count_entry.text())
 
             # Check limits based on data type
             reg_type = self.get_register_type()
-            is_bit_type = reg_type in ['coils', 'discrete']
+            is_bit_type = reg_type in ["coils", "discrete"]
             if is_bit_type:
                 if reg_count < 1 or reg_count > 2000:
-                    raise ValueError("Bit count must be between 1 and 2000 for coils/discrete inputs")
+                    raise ValueError(
+                        "Bit count must be between 1 and 2000 for coils/discrete inputs"
+                    )
             else:
                 if reg_count < 1 or reg_count > 125:
                     raise ValueError("Register count must be between 1 and 125")
@@ -587,7 +675,10 @@ Built with Python, PyQt6, and pymodbus
         self.clear_results()
 
         self.signals.log.emit("=" * 80, "header")
-        self.signals.log.emit(f"Reading Registers - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "header")
+        self.signals.log.emit(
+            f"Reading Registers - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "header",
+        )
         self.signals.log.emit("=" * 80, "header")
         self.signals.log.emit("", "")
 
@@ -634,19 +725,24 @@ Built with Python, PyQt6, and pymodbus
             # Determine register type to read
             register_type = self.get_register_type()
             reg_name_map = {
-                'holding': "Holding Registers",
-                'input': "Input Registers",
-                'coils': "Coils",
-                'discrete': "Discrete Inputs"
+                "holding": "Holding Registers",
+                "input": "Input Registers",
+                "coils": "Coils",
+                "discrete": "Discrete Inputs",
             }
             reg_name = reg_name_map.get(register_type, "Unknown")
 
             self.signals.log.emit(f"Device: {ip}:{port}", "")
             self.signals.log.emit(f"Unit ID: {unit_id}", "")
             self.signals.log.emit(f"Register Type: {reg_name}", "")
-            self.signals.log.emit(f"Register Range: {display_start} to {display_start + reg_count - 1} ({reg_count} registers)", "")
+            self.signals.log.emit(
+                f"Register Range: {display_start} to {display_start + reg_count - 1} ({reg_count} registers)",
+                "",
+            )
             if continuous:
-                self.signals.log.emit(f"Continuous mode: reading every {interval} seconds", "info")
+                self.signals.log.emit(
+                    f"Continuous mode: reading every {interval} seconds", "info"
+                )
             self.signals.log.emit("", "")
 
             read_count = 0
@@ -654,7 +750,9 @@ Built with Python, PyQt6, and pymodbus
                 read_count += 1
 
                 if continuous:
-                    self.signals.status.emit(f"Reading registers... (read #{read_count})")
+                    self.signals.status.emit(
+                        f"Reading registers... (read #{read_count})"
+                    )
                 else:
                     self.signals.status.emit(f"Connecting to {ip}:{port}...")
 
@@ -663,7 +761,9 @@ Built with Python, PyQt6, and pymodbus
                 # Connect and read registers
                 if read_individually:
                     # Read each register individually
-                    registers = self.read_registers_individually(ip, port, unit_id, timeout, register_type, start_reg, reg_count)
+                    registers = self.read_registers_individually(
+                        ip, port, unit_id, timeout, register_type, start_reg, reg_count
+                    )
 
                     # Count successes and errors
                     success_count = sum(1 for r in registers if not isinstance(r, dict))
@@ -672,34 +772,55 @@ Built with Python, PyQt6, and pymodbus
                     self.signals.progress.emit(75)
 
                     if continuous:
-                        self.signals.log.emit(f"Read #{read_count} at {datetime.now().strftime('%H:%M:%S')}: {success_count} OK, {error_count} errors", "success" if error_count == 0 else "info")
+                        self.signals.log.emit(
+                            f"Read #{read_count} at {datetime.now().strftime('%H:%M:%S')}: {success_count} OK, {error_count} errors",
+                            "success" if error_count == 0 else "info",
+                        )
                     else:
-                        self.signals.log.emit(f"Read complete: {success_count} successful, {error_count} errors", "success" if error_count == 0 else "info")
+                        self.signals.log.emit(
+                            f"Read complete: {success_count} successful, {error_count} errors",
+                            "success" if error_count == 0 else "info",
+                        )
 
                     # Always update table with mixed results
                     self.signals.update_table.emit(registers, start_reg)
 
                     if continuous:
-                        self.signals.status.emit(f"Continuous read active (#{read_count})")
+                        self.signals.status.emit(
+                            f"Continuous read active (#{read_count})"
+                        )
                     else:
-                        self.signals.status.emit(f"Read {success_count}/{reg_count} registers")
+                        self.signals.status.emit(
+                            f"Read {success_count}/{reg_count} registers"
+                        )
                 else:
                     # Read all registers in one request (original behavior)
-                    result = self.read_registers(ip, port, unit_id, timeout, register_type, start_reg, reg_count)
+                    result = self.read_registers(
+                        ip, port, unit_id, timeout, register_type, start_reg, reg_count
+                    )
 
                     self.signals.progress.emit(75)
 
-                    if result['success']:
+                    if result["success"]:
                         if continuous:
-                            self.signals.log.emit(f"Read #{read_count} successful at {datetime.now().strftime('%H:%M:%S')}", "success")
+                            self.signals.log.emit(
+                                f"Read #{read_count} successful at {datetime.now().strftime('%H:%M:%S')}",
+                                "success",
+                            )
                         else:
-                            self.signals.log.emit(f"Successfully read {reg_count} registers", "success")
+                            self.signals.log.emit(
+                                f"Successfully read {reg_count} registers", "success"
+                            )
                         # Pass the protocol address (0-based) to populate_table
-                        self.signals.update_table.emit(result['registers'], start_reg)
+                        self.signals.update_table.emit(result["registers"], start_reg)
                         if continuous:
-                            self.signals.status.emit(f"Continuous read active (#{read_count})")
+                            self.signals.status.emit(
+                                f"Continuous read active (#{read_count})"
+                            )
                         else:
-                            self.signals.status.emit(f"Successfully read {reg_count} registers")
+                            self.signals.status.emit(
+                                f"Successfully read {reg_count} registers"
+                            )
                     else:
                         self.signals.log.emit(f"ERROR: {result['error']}", "error")
                         self.signals.status.emit("Failed to read registers")
@@ -744,14 +865,32 @@ Built with Python, PyQt6, and pymodbus
 
         # If structure hasn't changed, update in place
         if not needs_rebuild and self.results_table.topLevelItemCount() > 0:
-            self._update_table_values(registers, start_address, reverse_byte, reverse_word, zero_based, is_bit_type)
+            self._update_table_values(
+                registers,
+                start_address,
+                reverse_byte,
+                reverse_word,
+                zero_based,
+                is_bit_type,
+            )
             return
 
         # Otherwise rebuild the table
         self.results_table.clear()
-        self.results_table.setHeaderLabels([
-            "Address", "Tag Name", "Hex", "Binary", "Uint16", "Int16", "Uint32", "Int32", "Float32", "String"
-        ])
+        self.results_table.setHeaderLabels(
+            [
+                "Address",
+                "Tag Name",
+                "Hex",
+                "Binary",
+                "Uint16",
+                "Int16",
+                "Uint32",
+                "Int32",
+                "Float32",
+                "String",
+            ]
+        )
 
         for i, value in enumerate(registers):
             # Calculate display address
@@ -760,9 +899,22 @@ Built with Python, PyQt6, and pymodbus
                 addr += 1  # Display as 1-based
 
             # Check if this is an error entry
-            if isinstance(value, dict) and 'error' in value:
-                item = QTreeWidgetItem([str(addr), "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR", "ERROR"])
-                item.setToolTip(0, value['error'])
+            if isinstance(value, dict) and "error" in value:
+                item = QTreeWidgetItem(
+                    [
+                        str(addr),
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                        "ERROR",
+                    ]
+                )
+                item.setToolTip(0, value["error"])
                 self.results_table.addTopLevelItem(item)
                 continue
 
@@ -770,7 +922,9 @@ Built with Python, PyQt6, and pymodbus
             if is_bit_type:
                 tag_name = self.tag_mappings.get((addr, None), "")
                 bit_val = "1" if value else "0"
-                item = QTreeWidgetItem([str(addr), tag_name, bit_val, "-", "-", "-", "-", "-", "-", "-"])
+                item = QTreeWidgetItem(
+                    [str(addr), tag_name, bit_val, "-", "-", "-", "-", "-", "-", "-"]
+                )
                 self.results_table.addTopLevelItem(item)
                 continue
 
@@ -780,7 +934,7 @@ Built with Python, PyQt6, and pymodbus
 
             # Create parent item for the register
             hex_val = f"0x{value:04X}"
-            binary_val = format(value, '016b')
+            binary_val = format(value, "016b")
 
             # Get tag for whole register
             whole_reg_tag = self.tag_mappings.get((addr, None), "")
@@ -796,9 +950,11 @@ Built with Python, PyQt6, and pymodbus
 
             if i + 1 < len(registers):
                 next_value = registers[i + 1]
-                if not (isinstance(next_value, dict) and 'error' in next_value):
+                if not (isinstance(next_value, dict) and "error" in next_value):
                     if reverse_byte:
-                        next_value = ((next_value & 0xFF) << 8) | ((next_value >> 8) & 0xFF)
+                        next_value = ((next_value & 0xFF) << 8) | (
+                            (next_value >> 8) & 0xFF
+                        )
 
                     if reverse_word:
                         uint32_val = (next_value << 16) | value
@@ -806,15 +962,19 @@ Built with Python, PyQt6, and pymodbus
                         uint32_val = (value << 16) | next_value
 
                     uint32_str = str(uint32_val)
-                    int32_val = uint32_val if uint32_val < 2147483648 else uint32_val - 4294967296
+                    int32_val = (
+                        uint32_val
+                        if uint32_val < 2147483648
+                        else uint32_val - 4294967296
+                    )
                     int32_str = str(int32_val)
 
                     try:
                         if reverse_word:
-                            bytes_data = struct.pack('>HH', next_value, value)
+                            bytes_data = struct.pack(">HH", next_value, value)
                         else:
-                            bytes_data = struct.pack('>HH', value, next_value)
-                        float_val = struct.unpack('>f', bytes_data)[0]
+                            bytes_data = struct.pack(">HH", value, next_value)
+                        float_val = struct.unpack(">f", bytes_data)[0]
                         float32_str = f"{float_val:.6f}"
                     except:
                         float32_str = "N/A"
@@ -828,23 +988,25 @@ Built with Python, PyQt6, and pymodbus
                     chars.append(chr(high_byte))
                 if 32 <= low_byte <= 126:
                     chars.append(chr(low_byte))
-                string_val = ''.join(chars) if chars else '.'
+                string_val = "".join(chars) if chars else "."
             except:
-                string_val = '.'
+                string_val = "."
 
             # Create parent item
-            parent_item = QTreeWidgetItem([
-                str(addr),
-                whole_reg_tag,
-                hex_val,
-                binary_val,
-                uint16_val,
-                str(int16_val),
-                uint32_str,
-                int32_str,
-                float32_str,
-                string_val
-            ])
+            parent_item = QTreeWidgetItem(
+                [
+                    str(addr),
+                    whole_reg_tag,
+                    hex_val,
+                    binary_val,
+                    uint16_val,
+                    str(int16_val),
+                    uint32_str,
+                    int32_str,
+                    float32_str,
+                    string_val,
+                ]
+            )
 
             # Make Tag Name column editable
             parent_item.setFlags(parent_item.flags() | Qt.ItemFlag.ItemIsEditable)
@@ -860,18 +1022,20 @@ Built with Python, PyQt6, and pymodbus
                 # Display bit number based on addressing mode
                 bit_display = bit + 1 if not zero_based else bit
 
-                bit_item = QTreeWidgetItem([
-                    f"{addr}.{bit_display}",
-                    bit_tag,
-                    str(bit_value),
-                    binary_val,  # Show full register binary for context
-                    hex_val,     # Show full register hex for context
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "-"
-                ])
+                bit_item = QTreeWidgetItem(
+                    [
+                        f"{addr}.{bit_display}",
+                        bit_tag,
+                        str(bit_value),
+                        binary_val,  # Show full register binary for context
+                        hex_val,  # Show full register hex for context
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                    ]
+                )
                 # Make Tag Name editable for bit rows too
                 bit_item.setFlags(bit_item.flags() | Qt.ItemFlag.ItemIsEditable)
                 parent_item.addChild(bit_item)
@@ -882,7 +1046,15 @@ Built with Python, PyQt6, and pymodbus
             else:
                 parent_item.setExpanded(False)
 
-    def _update_table_values(self, registers, start_address, reverse_byte, reverse_word, zero_based, is_bit_type):
+    def _update_table_values(
+        self,
+        registers,
+        start_address,
+        reverse_byte,
+        reverse_word,
+        zero_based,
+        is_bit_type,
+    ):
         """Update existing table items in place (preserves tag names, expansion state, scroll position)"""
 
         for i, value in enumerate(registers):
@@ -897,7 +1069,7 @@ Built with Python, PyQt6, and pymodbus
                 continue
 
             # Check if this is an error entry
-            if isinstance(value, dict) and 'error' in value:
+            if isinstance(value, dict) and "error" in value:
                 parent_item.setText(0, str(addr))
                 parent_item.setText(2, "ERROR")
                 parent_item.setText(3, "ERROR")
@@ -907,7 +1079,7 @@ Built with Python, PyQt6, and pymodbus
                 parent_item.setText(7, "ERROR")
                 parent_item.setText(8, "ERROR")
                 parent_item.setText(9, "ERROR")
-                parent_item.setToolTip(0, value['error'])
+                parent_item.setToolTip(0, value["error"])
                 continue
 
             # Handle bit values (coils/discrete inputs)
@@ -930,7 +1102,7 @@ Built with Python, PyQt6, and pymodbus
 
             # Update parent item values
             hex_val = f"0x{value:04X}"
-            binary_val = format(value, '016b')
+            binary_val = format(value, "016b")
             uint16_val = str(value)
             int16_val = value if value < 32768 else value - 65536
 
@@ -941,9 +1113,11 @@ Built with Python, PyQt6, and pymodbus
 
             if i + 1 < len(registers):
                 next_value = registers[i + 1]
-                if not (isinstance(next_value, dict) and 'error' in next_value):
+                if not (isinstance(next_value, dict) and "error" in next_value):
                     if reverse_byte:
-                        next_value = ((next_value & 0xFF) << 8) | ((next_value >> 8) & 0xFF)
+                        next_value = ((next_value & 0xFF) << 8) | (
+                            (next_value >> 8) & 0xFF
+                        )
 
                     if reverse_word:
                         uint32_val = (next_value << 16) | value
@@ -951,15 +1125,19 @@ Built with Python, PyQt6, and pymodbus
                         uint32_val = (value << 16) | next_value
 
                     uint32_str = str(uint32_val)
-                    int32_val = uint32_val if uint32_val < 2147483648 else uint32_val - 4294967296
+                    int32_val = (
+                        uint32_val
+                        if uint32_val < 2147483648
+                        else uint32_val - 4294967296
+                    )
                     int32_str = str(int32_val)
 
                     try:
                         if reverse_word:
-                            bytes_data = struct.pack('>HH', next_value, value)
+                            bytes_data = struct.pack(">HH", next_value, value)
                         else:
-                            bytes_data = struct.pack('>HH', value, next_value)
-                        float_val = struct.unpack('>f', bytes_data)[0]
+                            bytes_data = struct.pack(">HH", value, next_value)
+                        float_val = struct.unpack(">f", bytes_data)[0]
                         float32_str = f"{float_val:.6f}"
                     except:
                         float32_str = "N/A"
@@ -973,9 +1151,9 @@ Built with Python, PyQt6, and pymodbus
                     chars.append(chr(high_byte))
                 if 32 <= low_byte <= 126:
                     chars.append(chr(low_byte))
-                string_val = ''.join(chars) if chars else '.'
+                string_val = "".join(chars) if chars else "."
             except:
-                string_val = '.'
+                string_val = "."
 
             # Update parent item (preserve column 1 - Tag Name)
             parent_item.setText(0, str(addr))
@@ -1005,37 +1183,41 @@ Built with Python, PyQt6, and pymodbus
                     bit_item.setText(3, binary_val)
                     bit_item.setText(4, hex_val)
 
-    def read_registers(self, ip, port, unit_id, timeout, register_type, start_reg, count):
+    def read_registers(
+        self, ip, port, unit_id, timeout, register_type, start_reg, count
+    ):
         """Read registers from a Modbus device"""
-        result = {
-            'success': False,
-            'registers': None,
-            'error': None
-        }
+        result = {"success": False, "registers": None, "error": None}
 
         try:
             client = ModbusTcpClient(ip, port=port, timeout=timeout)
 
             if not client.connect():
-                result['error'] = "Failed to connect to device"
+                result["error"] = "Failed to connect to device"
                 return result
 
             try:
                 # Try different parameter names for different pymodbus versions
                 response = None
-                for param_style in [('slave', unit_id), ('unit', unit_id), (None, None)]:
+                for param_style in [
+                    ("slave", unit_id),
+                    ("unit", unit_id),
+                    (None, None),
+                ]:
                     try:
                         param_name, param_value = param_style
                         if param_name:
-                            kwargs = {'count': count, param_name: param_value}
+                            kwargs = {"count": count, param_name: param_value}
                         else:
-                            kwargs = {'count': count}
+                            kwargs = {"count": count}
 
-                        if register_type == 'holding':
-                            response = client.read_holding_registers(start_reg, **kwargs)
-                        elif register_type == 'input':
+                        if register_type == "holding":
+                            response = client.read_holding_registers(
+                                start_reg, **kwargs
+                            )
+                        elif register_type == "input":
                             response = client.read_input_registers(start_reg, **kwargs)
-                        elif register_type == 'coils':
+                        elif register_type == "coils":
                             response = client.read_coils(start_reg, **kwargs)
                         else:  # discrete inputs
                             response = client.read_discrete_inputs(start_reg, **kwargs)
@@ -1044,29 +1226,35 @@ Built with Python, PyQt6, and pymodbus
                         continue  # Try next parameter style
 
                 if response is None:
-                    raise Exception("Could not call read function with any known parameter style")
+                    raise Exception(
+                        "Could not call read function with any known parameter style"
+                    )
 
                 if response.isError():
-                    result['error'] = f"Modbus error: {response}"
+                    result["error"] = f"Modbus error: {response}"
                 else:
-                    result['success'] = True
+                    result["success"] = True
                     # For coils and discrete inputs, use .bits instead of .registers
-                    if register_type in ['coils', 'discrete']:
-                        result['registers'] = response.bits[:count]  # Only take the requested count
+                    if register_type in ["coils", "discrete"]:
+                        result["registers"] = response.bits[
+                            :count
+                        ]  # Only take the requested count
                     else:
-                        result['registers'] = response.registers
+                        result["registers"] = response.registers
 
             except Exception as e:
-                result['error'] = f"Failed to read registers: {str(e)}"
+                result["error"] = f"Failed to read registers: {str(e)}"
             finally:
                 client.close()
 
         except Exception as e:
-            result['error'] = f"Connection error: {str(e)}"
+            result["error"] = f"Connection error: {str(e)}"
 
         return result
 
-    def read_registers_individually(self, ip, port, unit_id, timeout, register_type, start_reg, count):
+    def read_registers_individually(
+        self, ip, port, unit_id, timeout, register_type, start_reg, count
+    ):
         """Read registers one at a time, continuing even if some fail"""
         results = []
 
@@ -1075,7 +1263,7 @@ Built with Python, PyQt6, and pymodbus
         if not client.connect():
             # If can't connect at all, return all errors
             for i in range(count):
-                results.append({'error': 'Failed to connect to device'})
+                results.append({"error": "Failed to connect to device"})
             return results
 
         try:
@@ -1084,41 +1272,55 @@ Built with Python, PyQt6, and pymodbus
                 try:
                     # Try different parameter names for different pymodbus versions
                     response = None
-                    for param_style in [('slave', unit_id), ('unit', unit_id), (None, None)]:
+                    for param_style in [
+                        ("slave", unit_id),
+                        ("unit", unit_id),
+                        (None, None),
+                    ]:
                         try:
                             param_name, param_value = param_style
                             if param_name:
-                                kwargs = {'count': 1, param_name: param_value}
+                                kwargs = {"count": 1, param_name: param_value}
                             else:
-                                kwargs = {'count': 1}
+                                kwargs = {"count": 1}
 
-                            if register_type == 'holding':
-                                response = client.read_holding_registers(reg_addr, **kwargs)
-                            elif register_type == 'input':
-                                response = client.read_input_registers(reg_addr, **kwargs)
-                            elif register_type == 'coils':
+                            if register_type == "holding":
+                                response = client.read_holding_registers(
+                                    reg_addr, **kwargs
+                                )
+                            elif register_type == "input":
+                                response = client.read_input_registers(
+                                    reg_addr, **kwargs
+                                )
+                            elif register_type == "coils":
                                 response = client.read_coils(reg_addr, **kwargs)
                             else:  # discrete inputs
-                                response = client.read_discrete_inputs(reg_addr, **kwargs)
+                                response = client.read_discrete_inputs(
+                                    reg_addr, **kwargs
+                                )
                             break  # If successful, exit the loop
                         except TypeError:
                             continue  # Try next parameter style
 
                     if response is None:
-                        results.append({'error': 'Could not call read function with any known parameter style'})
+                        results.append(
+                            {
+                                "error": "Could not call read function with any known parameter style"
+                            }
+                        )
                         continue
 
                     if response.isError():
-                        results.append({'error': f"Modbus error: {response}"})
+                        results.append({"error": f"Modbus error: {response}"})
                     else:
                         # For coils and discrete inputs, use .bits[0] instead of .registers[0]
-                        if register_type in ['coils', 'discrete']:
+                        if register_type in ["coils", "discrete"]:
                             results.append(response.bits[0])
                         else:
                             results.append(response.registers[0])
 
                 except Exception as e:
-                    results.append({'error': f"{str(e)}"})
+                    results.append({"error": f"{str(e)}"})
 
         finally:
             client.close()
@@ -1139,12 +1341,12 @@ Built with Python, PyQt6, and pymodbus
         filename = f"modbus_registers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
         try:
-            with open(filename, 'w') as f:
+            with open(filename, "w") as f:
                 # Write header
                 headers = []
                 for col in range(self.results_table.columnCount()):
                     headers.append(self.results_table.headerItem().text(col))
-                f.write(','.join(headers) + '\n')
+                f.write(",".join(headers) + "\n")
 
                 # Write data (iterate through tree items)
                 iterator = QTreeWidgetItemIterator(self.results_table)
@@ -1153,12 +1355,14 @@ Built with Python, PyQt6, and pymodbus
                     row_data = []
                     for col in range(self.results_table.columnCount()):
                         row_data.append(item.text(col))
-                    f.write(','.join(row_data) + '\n')
+                    f.write(",".join(row_data) + "\n")
                     iterator += 1
 
             QMessageBox.information(self, "Export", f"Results exported to {filename}")
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", f"Failed to export results: {str(e)}")
+            QMessageBox.critical(
+                self, "Export Error", f"Failed to export results: {str(e)}"
+            )
 
     def import_opf(self):
         """Import device configuration from KEPServerEX .opf file"""
@@ -1167,7 +1371,7 @@ Built with Python, PyQt6, and pymodbus
             self,
             "Select KEPServerEX Project File",
             "",
-            "KEPServerEX Files (*.opf);;All Files (*)"
+            "KEPServerEX Files (*.opf);;All Files (*)",
         )
 
         if not file_path:
@@ -1179,30 +1383,30 @@ Built with Python, PyQt6, and pymodbus
             config = parse_opf_file(file_path)
 
             # Populate connection settings
-            if config['ip']:
-                self.ip_combo.setCurrentText(config['ip'])
+            if config["ip"]:
+                self.ip_combo.setCurrentText(config["ip"])
                 # Add to combo if not already there
-                if self.ip_combo.findText(config['ip']) == -1:
-                    self.ip_combo.addItem(config['ip'])
-                    self.ip_combo.setCurrentText(config['ip'])
+                if self.ip_combo.findText(config["ip"]) == -1:
+                    self.ip_combo.addItem(config["ip"])
+                    self.ip_combo.setCurrentText(config["ip"])
 
-            self.port_entry.setText(str(config['port']))
-            self.unit_entry.setText(str(config['unit_id']))
+            self.port_entry.setText(str(config["port"]))
+            self.unit_entry.setText(str(config["unit_id"]))
 
             # Populate register settings
-            if config['register_count'] > 0:
-                self.start_register_entry.setText(str(config['min_address']))
-                self.register_count_entry.setText(str(config['scan_count']))
+            if config["register_count"] > 0:
+                self.start_register_entry.setText(str(config["min_address"]))
+                self.register_count_entry.setText(str(config["scan_count"]))
 
             # Set to holding registers by default
-            self.set_register_type('holding')
+            self.set_register_type("holding")
 
             # Store tag mappings for display
             # Create a lookup dict: (address, bit) -> tag_name
             self.tag_mappings = {}
-            for tag in config.get('tags', []):
-                key = (tag['address'], tag.get('bit'))
-                self.tag_mappings[key] = tag['tag_name']
+            for tag in config.get("tags", []):
+                key = (tag["address"], tag.get("bit"))
+                self.tag_mappings[key] = tag["tag_name"]
 
             # Update tags imported flag
             if self.tag_mappings:
@@ -1219,17 +1423,17 @@ Built with Python, PyQt6, and pymodbus
             summary = f"""Successfully imported KEPServerEX configuration:
 
 Connection:
-  IP Address: {config['ip']}
-  Port: {config['port']}
-  Unit ID: {config['unit_id']}
+  IP Address: {config["ip"]}
+  Port: {config["port"]}
+  Unit ID: {config["unit_id"]}
 
 Registers:
-  Total unique registers: {config['register_count']}
-  Register range: {config['min_address']} to {config['max_address']}
-  Scan count: {config['scan_count']}
+  Total unique registers: {config["register_count"]}
+  Register range: {config["min_address"]} to {config["max_address"]}
+  Scan count: {config["scan_count"]}
 
 Tags:
-  Total tags imported: {config.get('tag_count', 0)}
+  Total tags imported: {config.get("tag_count", 0)}
 
 The connection settings have been auto-populated.
 Click 'Read Registers' to start scanning."""
@@ -1239,7 +1443,9 @@ Click 'Read Registers' to start scanning."""
 
             # Auto-expand checkbox
             auto_expand_check = QCheckBox("Automatically expand bit rows when scanning")
-            auto_expand_check.setChecked(self.auto_expand_bits)  # Use current preference
+            auto_expand_check.setChecked(
+                self.auto_expand_bits
+            )  # Use current preference
             layout.addWidget(auto_expand_check)
 
             # OK button
@@ -1256,11 +1462,14 @@ Click 'Read Registers' to start scanning."""
             self.signals.status.emit("KEPServerEX configuration imported successfully")
 
         except Exception as e:
-            QMessageBox.critical(self, "Import Error", f"Failed to import KEPServerEX file:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Import Error", f"Failed to import KEPServerEX file:\n{str(e)}"
+            )
             self.signals.status.emit("Failed to import configuration")
 
 
 def main():
+    """Main entry point - can be called directly or from launcher"""
     app = QApplication(sys.argv)
     window = ModbusScannerGUI()
     window.show()

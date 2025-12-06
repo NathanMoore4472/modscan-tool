@@ -130,7 +130,7 @@ class UpdateChecker:
         """Get the asset name for the current platform"""
         system = platform.system()
         if system == "Windows":
-            return "ModScan-Tool-Windows.exe"
+            return "ModScan-Tool-Windows.zip"
         elif system == "Darwin":  # macOS
             return "ModScan-Tool-macOS.zip"
         elif system == "Linux":
@@ -469,9 +469,31 @@ class UpdateChecker:
                     break
 
         if system == "Windows":
+            # Extract zip if needed
+            if new_executable_path.endswith('.zip'):
+                os.makedirs(extract_dir, exist_ok=True)
+                with zipfile.ZipFile(new_executable_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_dir)
+                # Find the extracted folder
+                folder_name = "ModScan-Tool-Windows"
+                extracted_folder = os.path.join(extract_dir, folder_name)
+                if os.path.exists(extracted_folder):
+                    new_executable_path = extracted_folder
+
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.bat")
             with open(updater_script, 'w') as f:
-                f.write(f"""@echo off
+                # Use robocopy for directory or move for single file
+                if os.path.isdir(new_executable_path):
+                    f.write(f"""@echo off
+timeout /t 2 /nobreak > nul
+rmdir /s /q "{current_exe}"
+robocopy "{new_executable_path}" "{current_exe}" /E /MOVE
+start "" "{current_exe}\\ModScan Tool.exe"
+rmdir /s /q "{extract_dir}"
+del "%~f0"
+""")
+                else:
+                    f.write(f"""@echo off
 timeout /t 2 /nobreak > nul
 move /y "{new_executable_path}" "{current_exe}"
 start "" "{current_exe}"
