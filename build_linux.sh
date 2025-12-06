@@ -22,9 +22,10 @@ fi
 pyinstaller --clean --noconfirm \
     --name "modscan-tool" \
     --windowed \
-    --onefile \
+    --onedir \
+    --add-data "icon.png:." \
     $ICON_ARG \
-    modscan_tool.py
+    launcher.py
 
 echo ""
 echo "Build complete!"

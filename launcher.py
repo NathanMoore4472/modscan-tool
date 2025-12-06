@@ -7,6 +7,7 @@ Fast-loading launcher that shows splash screen while main app loads
 import sys
 import time
 import re
+import os
 
 # Import only minimal PyQt6 for splash screen (fast)
 from PyQt6.QtWidgets import QApplication, QSplashScreen
@@ -14,10 +15,21 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
 def get_version():
     """Extract version from modscan_tool.py without importing it"""
     try:
-        with open("modscan_tool.py", "r") as f:
+        version_file = resource_path("modscan_tool.py")
+        with open(version_file, "r") as f:
             content = f.read()
             match = re.search(r'self\.app_version\s*=\s*["\']([^"\']+)["\']', content)
             if match:
@@ -39,7 +51,7 @@ def create_splash():
     painter = QPainter(splash_pix)
 
     # Load and draw logo
-    logo = QPixmap("icon.png")
+    logo = QPixmap(resource_path("icon.png"))
     if not logo.isNull():
         # Scale logo to 80x80 and center it at top
         logo = logo.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio,

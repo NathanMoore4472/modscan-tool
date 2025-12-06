@@ -63,9 +63,10 @@ jobs:
         pyinstaller --clean --noconfirm \
           --name "ModScan Tool" \
           --windowed \
-          --onefile \
+          --onedir \
+          --add-data "icon.png:." \
           $ICON_ARG \
-          modscan_tool.py
+          launcher.py
 
         # Create DMG for manual distribution
         mkdir -p "dist/dmg"
@@ -91,12 +92,16 @@ jobs:
         pyinstaller --clean --noconfirm `
           --name "ModScan Tool" `
           --windowed `
-          --onefile `
+          --onedir `
+          --add-data "icon.png;." `
           $ICON_ARG `
-          modscan_tool.py
+          launcher.py
 
-        # Rename for clarity
-        Move-Item "dist/ModScan Tool.exe" "dist/ModScan-Tool-Windows.exe"
+        # Create standalone folder and rename for clarity
+        Move-Item "dist/ModScan Tool" "dist/ModScan-Tool-Windows"
+
+        # Create ZIP for release
+        Compress-Archive -Path "dist/ModScan-Tool-Windows" -DestinationPath "dist/ModScan-Tool-Windows.zip"
       shell: pwsh
 
     - name: Build for Linux
@@ -111,12 +116,13 @@ jobs:
         pyinstaller --clean --noconfirm \
           --name "modscan-tool" \
           --windowed \
-          --onefile \
+          --onedir \
+          --add-data "icon.png:." \
           $ICON_ARG \
-          modscan_tool.py
+          launcher.py
 
         # Make executable
-        chmod +x dist/modscan-tool
+        chmod +x dist/modscan-tool/modscan-tool
 
         # Create tarball for distribution
         tar -czf dist/ModScan-Tool-Linux.tar.gz -C dist modscan-tool
@@ -136,7 +142,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ModScan-Tool-Windows
-        path: dist/ModScan-Tool-Windows.exe
+        path: dist/ModScan-Tool-Windows
 
     - name: Upload Linux artifact
       if: matrix.os == 'ubuntu-latest'
@@ -161,7 +167,7 @@ jobs:
       if: github.event_name == 'release' && matrix.os == 'windows-latest'
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/ModScan-Tool-Windows.exe
+        files: dist/ModScan-Tool-Windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
