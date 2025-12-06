@@ -5,11 +5,16 @@ Simulates a Modbus device with test data matching the LVSG-E0-01-D1.opf configur
 """
 
 import sys
-import time
-import random
+import os
+import signal
+import argparse
+from pathlib import Path
 from pymodbus.server import StartTcpServer
 from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
+
+# PID file location
+PID_FILE = Path(os.path.expanduser("~")) / ".modbus_test_server.pid"
 
 
 def create_test_data():
@@ -36,8 +41,88 @@ def create_test_data():
     return registers
 
 
+def write_pid_file():
+    """Write current process PID to file"""
+    try:
+        PID_FILE.write_text(str(os.getpid()))
+    except Exception as e:
+        print(f"Warning: Could not write PID file: {e}")
+
+
+def remove_pid_file():
+    """Remove PID file"""
+    try:
+        if PID_FILE.exists():
+            PID_FILE.unlink()
+    except Exception as e:
+        print(f"Warning: Could not remove PID file: {e}")
+
+
+def stop_server():
+    """Stop running Modbus test server"""
+    if not PID_FILE.exists():
+        print("No running server found (PID file does not exist)")
+        return False
+
+    try:
+        # Read PID from file
+        pid = int(PID_FILE.read_text().strip())
+
+        # Check if process is running
+        try:
+            os.kill(pid, 0)  # Signal 0 just checks if process exists
+        except OSError:
+            print(f"Server with PID {pid} is not running")
+            remove_pid_file()
+            return False
+
+        # Kill the process
+        print(f"Stopping Modbus test server (PID: {pid})...")
+        os.kill(pid, signal.SIGTERM)
+
+        # Wait a bit and check if it stopped
+        import time
+        time.sleep(0.5)
+
+        try:
+            os.kill(pid, 0)
+            # Still running, force kill
+            print("Server did not stop gracefully, forcing...")
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            # Process is gone
+            pass
+
+        remove_pid_file()
+        print("✓ Server stopped successfully")
+        return True
+
+    except Exception as e:
+        print(f"Error stopping server: {e}")
+        remove_pid_file()
+        return False
+
+
 def run_server(host='0.0.0.0', port=5020):
     """Run the Modbus TCP server"""
+
+    # Check if server is already running
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            try:
+                os.kill(pid, 0)
+                print(f"Error: Server is already running with PID {pid}")
+                print(f"Stop it first with: python3 modbus_test_server.py --stop")
+                sys.exit(1)
+            except OSError:
+                # PID file exists but process is dead, clean it up
+                remove_pid_file()
+        except:
+            remove_pid_file()
+
+    # Write PID file
+    write_pid_file()
 
     print("=" * 60)
     print("Modbus TCP Test Server")
@@ -46,6 +131,7 @@ def run_server(host='0.0.0.0', port=5020):
     print(f"  Host: {host}")
     print(f"  Port: {port}")
     print(f"  Unit ID: 1")
+    print(f"  PID: {os.getpid()}")
     print()
     print("Register Configuration:")
 
@@ -87,7 +173,9 @@ def run_server(host='0.0.0.0', port=5020):
     print(f"     Start Register: 1")
     print(f"     Register Count: 6")
     print()
-    print("Press Ctrl+C to stop the server")
+    print("To stop the server:")
+    print("  python3 modbus_test_server.py --stop")
+    print("  or press Ctrl+C")
     print("=" * 60)
     print()
 
@@ -100,26 +188,68 @@ def run_server(host='0.0.0.0', port=5020):
         )
     except KeyboardInterrupt:
         print("\n\nServer stopped by user")
+        remove_pid_file()
     except Exception as e:
         print(f"\nError starting server: {e}")
-        print("\nNote: If port 502 is in use, try a different port:")
-        print("  python3 modbus_test_server.py 5020")
+        print("\nNote: If port is in use, try a different port:")
+        print("  python3 modbus_test_server.py --port 5021")
+        remove_pid_file()
+        sys.exit(1)
 
 
 def main():
     """Main entry point"""
-    # Default port
-    port = 5020
+    parser = argparse.ArgumentParser(
+        description='Modbus TCP Test Server',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  Start server on default port:
+    python3 modbus_test_server.py
 
-    # Check if port is specified in command line
-    if len(sys.argv) > 1:
-        try:
-            port = int(sys.argv[1])
-        except ValueError:
-            print(f"Invalid port: {sys.argv[1]}")
-            print("Usage: python3 modbus_test_server.py [port]")
-            print("Example: python3 modbus_test_server.py 5020")
-            sys.exit(1)
+  Start server on specific port:
+    python3 modbus_test_server.py --port 5021
+
+  Stop running server:
+    python3 modbus_test_server.py --stop
+        """
+    )
+
+    parser.add_argument(
+        '--port', '-p',
+        type=int,
+        default=5020,
+        help='Port to listen on (default: 5020)'
+    )
+
+    parser.add_argument(
+        '--host',
+        default='0.0.0.0',
+        help='Host to bind to (default: 0.0.0.0)'
+    )
+
+    parser.add_argument(
+        '--stop',
+        action='store_true',
+        help='Stop running Modbus test server'
+    )
+
+    # For backwards compatibility, also accept port as positional argument
+    parser.add_argument(
+        'legacy_port',
+        nargs='?',
+        type=int,
+        help=argparse.SUPPRESS  # Hidden from help
+    )
+
+    args = parser.parse_args()
+
+    # Handle --stop command
+    if args.stop:
+        sys.exit(0 if stop_server() else 1)
+
+    # Use legacy port if provided (backwards compatibility)
+    port = args.legacy_port if args.legacy_port else args.port
 
     # Note: Port 502 requires root/admin privileges
     if port == 502:
@@ -127,7 +257,7 @@ def main():
         print("Consider using port 5020 instead (no special privileges needed)")
         print()
 
-    run_server(host='0.0.0.0', port=port)
+    run_server(host=args.host, port=port)
 
 
 if __name__ == "__main__":
