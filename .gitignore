@@ -37,3 +37,12 @@ Thumbs.db
 .claude/
 .claude_history
 *.claude
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.tox/
+*.cover
+.hypothesis/
