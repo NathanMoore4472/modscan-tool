@@ -11,7 +11,7 @@ import re
 # Import only minimal PyQt6 for splash screen (fast)
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPixmap, QPainter, QFont
+from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 
 
 def get_version():
@@ -32,30 +32,42 @@ def create_splash():
     version = get_version()
 
     # Create splash pixmap
-    splash_pix = QPixmap(450, 250)
-    splash_pix.fill(Qt.GlobalColor.white)
+    splash_pix = QPixmap(450, 300)
+    splash_pix.fill(QColor("#F5F7F7"))  # Match logo background
 
-    # Draw text on splash screen
+    # Draw on splash screen
     painter = QPainter(splash_pix)
+
+    # Load and draw logo
+    logo = QPixmap("icon.png")
+    if not logo.isNull():
+        # Scale logo to 80x80 and center it at top
+        logo = logo.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio,
+                          Qt.TransformationMode.SmoothTransformation)
+        logo_x = (splash_pix.width() - logo.width()) // 2
+        painter.drawPixmap(logo_x, 20, logo)
+
     painter.setPen(Qt.GlobalColor.black)
 
-    # Title
+    # Title (positioned below logo)
     title_font = QFont("Arial", 28, QFont.Weight.Bold)
     painter.setFont(title_font)
     painter.drawText(
         splash_pix.rect(),
-        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop,
-        "\n\nModScan Tool",
+        Qt.AlignmentFlag.AlignCenter,
+        "ModScan Tool",
     )
 
-    # Version
+    # Version (below title)
     version_font = QFont("Arial", 11)
     painter.setFont(version_font)
     painter.drawText(
-        splash_pix.rect(), Qt.AlignmentFlag.AlignCenter, f"Version {version}"
+        20, 190, splash_pix.width() - 40, 30,
+        Qt.AlignmentFlag.AlignCenter,
+        f"Version {version}"
     )
 
-    # Author
+    # Author (at bottom)
     author_font = QFont("Arial", 10)
     painter.setFont(author_font)
     painter.setPen(Qt.GlobalColor.darkGray)
@@ -104,23 +116,20 @@ def main():
     app.processEvents()
 
     window = ModbusScannerGUI()
-
-    # Helper function to finish splash and show main window
-    def finish_and_show():
-        splash.close()
-        window.show()
+    window.show()
 
     # Ensure splash displays for at least 1 second (non-blocking)
     elapsed = time.time() - splash_start
-    min_splash_time = 1.0  # seconds
+    min_splash_time = 2.0  # seconds
 
     if elapsed < min_splash_time:
-        # Use QTimer to close splash and show window after remaining time
+        # Use QTimer to close splash after remaining time (keeps app responsive)
+        window.hide()
         delay_ms = int((min_splash_time - elapsed) * 1000)
-        QTimer.singleShot(delay_ms, finish_and_show)
+        QTimer.singleShot(delay_ms, lambda: (splash.finish(window), window.show()))
     else:
-        # Close splash and show window immediately if enough time has passed
-        finish_and_show()
+        # Close splash immediately if enough time has passed
+        splash.finish(window)
 
     # Run application
     sys.exit(app.exec())
