@@ -107,7 +107,7 @@ def main():
 
     # Helper function to finish splash and show main window
     def finish_and_show():
-        splash.finish(window)
+        splash.close()
         window.show()
 
     # Ensure splash displays for at least 1 second (non-blocking)
