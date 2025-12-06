@@ -6,7 +6,6 @@ Fast-loading launcher that shows splash screen while main app loads
 
 import sys
 import time
-import re
 import os
 
 # Import only minimal PyQt6 for splash screen (fast)
@@ -15,7 +14,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 
 # Application version - single source of truth
-VERSION = "1.3.4"
+VERSION = "1.4"
 
 
 def resource_path(relative_path):

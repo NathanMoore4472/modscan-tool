@@ -68,16 +68,11 @@ jobs:
           $ICON_ARG \
           launcher.py
 
-        # Create DMG for manual distribution
+        # Create DMG for distribution
         mkdir -p "dist/dmg"
         # Use ditto instead of cp - it handles .app bundles and symlinks better
         ditto "dist/ModScan Tool.app" "dist/dmg/ModScan Tool.app"
         hdiutil create -volname "ModScan Tool" -srcfolder "dist/dmg" -ov -format UDZO "dist/ModScan-Tool-macOS.dmg"
-
-        # Create ZIP for auto-updater (preserve symlinks to keep size small)
-        cd dist
-        zip -r -q --symlinks "ModScan-Tool-macOS.zip" "ModScan Tool.app"
-        cd ..
 
     - name: Build for Windows
       if: matrix.os == 'windows-latest'
@@ -136,7 +131,6 @@ jobs:
         path: |
           dist/ModScan Tool.app
           dist/ModScan-Tool-macOS.dmg
-          dist/ModScan-Tool-macOS.zip
 
     - name: Upload Windows artifact
       if: matrix.os == 'windows-latest'
@@ -157,9 +151,7 @@ jobs:
       if: github.event_name == 'release' && matrix.os == 'macos-latest'
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          dist/ModScan-Tool-macOS.dmg
-          dist/ModScan-Tool-macOS.zip
+        files: dist/ModScan-Tool-macOS.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

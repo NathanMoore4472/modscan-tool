@@ -19,13 +19,23 @@ import re
 # Import certifi for SSL certificate verification
 try:
     import certifi
+
     HAS_CERTIFI = True
 except ImportError:
     HAS_CERTIFI = False
 
-from PyQt6.QtWidgets import (QMessageBox, QCheckBox, QApplication, QDialog,
-                             QVBoxLayout, QHBoxLayout, QLabel, QTextBrowser,
-                             QPushButton, QDialogButtonBox)
+from PyQt6.QtWidgets import (
+    QMessageBox,
+    QCheckBox,
+    QApplication,
+    QDialog,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTextBrowser,
+    QPushButton,
+    QDialogButtonBox,
+)
 from PyQt6.QtCore import Qt
 
 
@@ -37,10 +47,10 @@ def _macos_update_and_restart(app_path, new_app_path, temp_dir):
     import subprocess
 
     # Create debug log
-    log_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'update_debug.txt')
+    log_path = os.path.join(os.path.expanduser("~"), "Desktop", "update_debug.txt")
 
     def log(msg):
-        with open(log_path, 'a') as f:
+        with open(log_path, "a") as f:
             f.write(f"{time.strftime('%H:%M:%S')} - {msg}\n")
 
     log(f"Starting update process")
@@ -85,7 +95,7 @@ def _macos_update_and_restart(app_path, new_app_path, temp_dir):
 
         # Launch the app
         log(f"Launching app: {app_path}")
-        result = subprocess.call(['open', app_path])
+        result = subprocess.call(["open", app_path])
         log(f"Launch command result: {result}")
 
     except Exception as e:
@@ -119,12 +129,16 @@ class UpdateChecker:
         self.parent = parent_window
 
         # Load preferences
-        self.check_updates_on_startup = settings.value("check_updates_on_startup", True, type=bool)
-        self.update_debug_logging = settings.value("update_debug_logging", False, type=bool)
+        self.check_updates_on_startup = settings.value(
+            "check_updates_on_startup", True, type=bool
+        )
+        self.update_debug_logging = settings.value(
+            "update_debug_logging", False, type=bool
+        )
 
     def is_frozen(self):
         """Check if running as compiled executable"""
-        return getattr(sys, 'frozen', False)
+        return getattr(sys, "frozen", False)
 
     def get_platform_asset_name(self):
         """Get the asset name for the current platform"""
@@ -148,10 +162,12 @@ class UpdateChecker:
         """Get the path to the .app bundle on macOS"""
         if platform.system() == "Darwin" and self.is_frozen():
             exe_path = sys.executable
-            parts = exe_path.split('/')
+            parts = exe_path.split("/")
             try:
-                app_index = next(i for i, part in enumerate(parts) if part.endswith('.app'))
-                return '/'.join(parts[:app_index + 1])
+                app_index = next(
+                    i for i, part in enumerate(parts) if part.endswith(".app")
+                )
+                return "/".join(parts[: app_index + 1])
             except StopIteration:
                 return exe_path
         else:
@@ -164,11 +180,13 @@ class UpdateChecker:
         Args:
             silent: If True, only show dialog if update is available
         """
-        print(f"Checking for updates... (silent={silent}, current version={self.app_version})")
+        print(
+            f"Checking for updates... (silent={silent}, current version={self.app_version})"
+        )
         try:
             url = "https://api.github.com/repos/NathanMoore4472/modscan-tool/releases/latest"
             req = urllib.request.Request(url)
-            req.add_header('User-Agent', 'ModScan-Tool')
+            req.add_header("User-Agent", "ModScan-Tool")
 
             # Use certifi for SSL verification if available
             if HAS_CERTIFI:
@@ -176,25 +194,31 @@ class UpdateChecker:
             else:
                 ssl_context = ssl.create_default_context()
 
-            with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+            with urllib.request.urlopen(
+                req, timeout=5, context=ssl_context
+            ) as response:
                 data = json.loads(response.read().decode())
 
-            latest_version = data.get('tag_name', '').lstrip('v')
-            release_url = data.get('html_url', '')
-            release_notes = data.get('body', '')
-            assets = data.get('assets', [])
+            latest_version = data.get("tag_name", "").lstrip("v")
+            release_url = data.get("html_url", "")
+            release_notes = data.get("body", "")
+            assets = data.get("assets", [])
 
-            print(f"Latest version: {latest_version}, Current version: {self.app_version}")
+            print(
+                f"Latest version: {latest_version}, Current version: {self.app_version}"
+            )
 
             # Compare versions
             if self._is_newer_version(latest_version, self.app_version):
                 print(f"Update available! {latest_version} > {self.app_version}")
-                self.show_update_dialog(latest_version, release_url, release_notes, assets)
+                self.show_update_dialog(
+                    latest_version, release_url, release_notes, assets
+                )
             elif not silent:
                 QMessageBox.information(
                     self.parent,
                     "No Updates Available",
-                    f"You are running the latest version ({self.app_version})."
+                    f"You are running the latest version ({self.app_version}).",
                 )
 
         except urllib.error.URLError as e:
@@ -204,25 +228,26 @@ class UpdateChecker:
                 QMessageBox.warning(
                     self.parent,
                     "Update Check Failed",
-                    f"Could not check for updates: {str(e)}"
+                    f"Could not check for updates: {str(e)}",
                 )
         except Exception as e:
             # Always log errors to console for debugging
             print(f"Update check failed (Exception): {e}")
             import traceback
+
             traceback.print_exc()
             if not silent:
                 QMessageBox.warning(
                     self.parent,
                     "Update Check Failed",
-                    f"Could not check for updates: {str(e)}"
+                    f"Could not check for updates: {str(e)}",
                 )
 
     def _is_newer_version(self, latest, current):
         """Compare version strings (e.g., '1.2.3' vs '1.2.2')"""
         try:
-            latest_parts = [int(x) for x in latest.split('.')]
-            current_parts = [int(x) for x in current.split('.')]
+            latest_parts = [int(x) for x in latest.split(".")]
+            current_parts = [int(x) for x in current.split(".")]
             return latest_parts > current_parts
         except:
             return False
@@ -238,54 +263,58 @@ class UpdateChecker:
         # html = html.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
         # Convert headers (### Header -> <h3>Header</h3>)
-        html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
-        html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
-        html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+        html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+        html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+        html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
 
         # Convert bold (**text** or __text__)
-        html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html)
-        html = re.sub(r'__(.+?)__', r'<b>\1</b>', html)
+        html = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html)
+        html = re.sub(r"__(.+?)__", r"<b>\1</b>", html)
 
         # Convert italic (*text* or _text_) - but not inside words
-        html = re.sub(r'\*([^\*]+?)\*', r'<i>\1</i>', html)
-        html = re.sub(r'(?<!\w)_([^_]+?)_(?!\w)', r'<i>\1</i>', html)
+        html = re.sub(r"\*([^\*]+?)\*", r"<i>\1</i>", html)
+        html = re.sub(r"(?<!\w)_([^_]+?)_(?!\w)", r"<i>\1</i>", html)
 
         # Convert links [text](url)
-        html = re.sub(r'\[([^\]]+)\]\(([^\)]+)\)', r'<a href="\2">\1</a>', html)
+        html = re.sub(r"\[([^\]]+)\]\(([^\)]+)\)", r'<a href="\2">\1</a>', html)
 
         # Convert inline code `code`
-        html = re.sub(r'`([^`]+)`', r'<code style="background-color: #f0f0f0; padding: 2px 4px; border-radius: 3px;">\1</code>', html)
+        html = re.sub(
+            r"`([^`]+)`",
+            r'<code style="background-color: grey; padding: 2px 6px; border-radius: 4px; border: 1px solid #ccc; font-family: Consolas, Monaco, monospace; font-size: 0.95em;">\1</code>',
+            html,
+        )
 
         # Convert unordered lists (- item or * item)
-        lines = html.split('\n')
+        lines = html.split("\n")
         in_list = False
         result_lines = []
 
         for line in lines:
             # Check if line is a list item
-            if re.match(r'^[\s]*[-*]\s+(.+)$', line):
-                list_item = re.sub(r'^[\s]*[-*]\s+(.+)$', r'\1', line)
+            if re.match(r"^[\s]*[-*]\s+(.+)$", line):
+                list_item = re.sub(r"^[\s]*[-*]\s+(.+)$", r"\1", line)
                 if not in_list:
-                    result_lines.append('<ul>')
+                    result_lines.append("<ul>")
                     in_list = True
-                result_lines.append(f'<li>{list_item}</li>')
+                result_lines.append(f"<li>{list_item}</li>")
             else:
                 if in_list:
-                    result_lines.append('</ul>')
+                    result_lines.append("</ul>")
                     in_list = False
                 result_lines.append(line)
 
         if in_list:
-            result_lines.append('</ul>')
+            result_lines.append("</ul>")
 
-        html = '\n'.join(result_lines)
+        html = "\n".join(result_lines)
 
         # Convert line breaks to <br> for paragraphs
-        html = re.sub(r'\n\n+', '</p><p>', html)
+        html = re.sub(r"\n\n+", "</p><p>", html)
 
         # Wrap in paragraph if not already wrapped
-        if not html.startswith('<'):
-            html = f'<p>{html}</p>'
+        if not html.startswith("<"):
+            html = f"<p>{html}</p>"
 
         return html
 
@@ -297,8 +326,8 @@ class UpdateChecker:
         # Only look for assets if running as frozen executable
         if self.is_frozen() and assets and asset_name:
             for asset in assets:
-                if asset.get('name') == asset_name:
-                    asset_url = asset.get('browser_download_url')
+                if asset.get("name") == asset_name:
+                    asset_url = asset.get("browser_download_url")
                     break
 
         # Create custom dialog
@@ -331,14 +360,18 @@ class UpdateChecker:
         text_browser.setOpenExternalLinks(True)  # Allow clicking links
 
         # Convert markdown to HTML
-        formatted_notes = self._markdown_to_html(notes if notes else 'No release notes available.')
+        formatted_notes = self._markdown_to_html(
+            notes if notes else "No release notes available."
+        )
         text_browser.setHtml(formatted_notes)
 
         layout.addWidget(text_browser)
 
         # Note for non-frozen executables
         if not self.is_frozen():
-            note_label = QLabel('<p style="color: #666;"><i>Note: Auto-install is only available for compiled executables.</i></p>')
+            note_label = QLabel(
+                '<p style="color: #666;"><i>Note: Auto-install is only available for compiled executables.</i></p>'
+            )
             note_label.setTextFormat(Qt.TextFormat.RichText)
             layout.addWidget(note_label)
 
@@ -394,9 +427,11 @@ class UpdateChecker:
             else:
                 # Open browser to download page
                 import webbrowser
+
                 webbrowser.open(url)
         elif result == 2:  # Manual download button
             import webbrowser
+
             webbrowser.open(url)
 
     def download_update(self, url):
@@ -413,10 +448,10 @@ class UpdateChecker:
                 ssl_context = ssl.create_default_context()
 
             req = urllib.request.Request(url)
-            req.add_header('User-Agent', 'ModScan-Tool')
+            req.add_header("User-Agent", "ModScan-Tool")
 
             with urllib.request.urlopen(req, context=ssl_context) as response:
-                with open(download_path, 'wb') as out_file:
+                with open(download_path, "wb") as out_file:
                     out_file.write(response.read())
 
             # Install the update
@@ -424,9 +459,7 @@ class UpdateChecker:
 
         except Exception as e:
             QMessageBox.critical(
-                self.parent,
-                "Download Failed",
-                f"Failed to download update:\n{str(e)}"
+                self.parent, "Download Failed", f"Failed to download update:\n{str(e)}"
             )
 
     def install_update(self, new_executable_path):
@@ -445,17 +478,17 @@ class UpdateChecker:
         extract_dir = os.path.join(tempfile.gettempdir(), "modscan_update")
 
         # Mount DMG and copy app for macOS
-        if system == "Darwin" and new_executable_path.endswith('.dmg'):
+        if system == "Darwin" and new_executable_path.endswith(".dmg"):
             # Mount the DMG
             mount_point = "/Volumes/ModScan Tool"
             app_name = "ModScan Tool.app"
             # Will handle mounting in the shell script
             new_executable_path = new_executable_path  # Pass DMG path to script
 
-        elif system == "Linux" and new_executable_path.endswith('.tar.gz'):
+        elif system == "Linux" and new_executable_path.endswith(".tar.gz"):
             # Extract tar.gz for Linux
             os.makedirs(extract_dir, exist_ok=True)
-            with tarfile.open(new_executable_path, 'r:gz') as tar_ref:
+            with tarfile.open(new_executable_path, "r:gz") as tar_ref:
                 tar_ref.extractall(extract_dir)
             # Find the executable
             for item in os.listdir(extract_dir):
@@ -466,9 +499,9 @@ class UpdateChecker:
 
         if system == "Windows":
             # Extract zip if needed
-            if new_executable_path.endswith('.zip'):
+            if new_executable_path.endswith(".zip"):
                 os.makedirs(extract_dir, exist_ok=True)
-                with zipfile.ZipFile(new_executable_path, 'r') as zip_ref:
+                with zipfile.ZipFile(new_executable_path, "r") as zip_ref:
                     zip_ref.extractall(extract_dir)
                 # Find the extracted folder
                 folder_name = "ModScan-Tool-Windows"
@@ -477,7 +510,7 @@ class UpdateChecker:
                     new_executable_path = extracted_folder
 
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.bat")
-            with open(updater_script, 'w') as f:
+            with open(updater_script, "w") as f:
                 # Use robocopy for directory or move for single file
                 if os.path.isdir(new_executable_path):
                     f.write(f"""@echo off
@@ -495,26 +528,26 @@ move /y "{new_executable_path}" "{current_exe}"
 start "" "{current_exe}"
 del "%~f0"
 """)
-            subprocess.Popen(['cmd', '/c', updater_script], shell=False)
+            subprocess.Popen(["cmd", "/c", updater_script], shell=False)
 
         elif system == "Darwin":
             # For macOS, use shell script (most reliable for frozen apps)
-            updater_script = os.path.expanduser('~/Desktop/modscan_updater.sh')
+            updater_script = os.path.expanduser("~/Desktop/modscan_updater.sh")
 
             # Set up logging based on user preference
             if self.update_debug_logging:
-                log_file = os.path.expanduser('~/Desktop/update_debug.txt')
+                log_file = os.path.expanduser("~/Desktop/update_debug.txt")
                 log_redirect = f'exec > "{log_file}" 2>&1'
                 echo_cmd = "echo"
             else:
-                log_redirect = '# Logging disabled'
+                log_redirect = "# Logging disabled"
                 echo_cmd = ": #"  # No-op command
 
             dmg_path = new_executable_path
             mount_point = "/Volumes/ModScan Tool"
             app_name = "ModScan Tool.app"
 
-            with open(updater_script, 'w') as f:
+            with open(updater_script, "w") as f:
                 f.write(f"""#!/bin/bash
 {log_redirect}
 {echo_cmd} "=== Update started at $(date) ==="
@@ -567,12 +600,35 @@ rm -rf "{current_exe}"
 # Copy new app using ditto (preserves .app bundle structure)
 {echo_cmd} "Copying new app from DMG..."
 ditto "{mount_point}/{app_name}" "{current_exe}"
-{echo_cmd} "New app copied"
+DITTO_RESULT=$?
+{echo_cmd} "Ditto exit code: $DITTO_RESULT"
+
+if [ $DITTO_RESULT -ne 0 ]; then
+    {echo_cmd} "ERROR: Failed to copy app from DMG"
+    hdiutil detach "{mount_point}" -quiet
+    exit 1
+fi
+
+# Verify the app was copied
+if [ ! -d "{current_exe}" ]; then
+    {echo_cmd} "ERROR: App not found after copy"
+    hdiutil detach "{mount_point}" -quiet
+    exit 1
+fi
+
+{echo_cmd} "New app copied successfully"
+
+# Force filesystem sync before unmounting
+sync
+sleep 2
 
 # Unmount DMG
 {echo_cmd} "Unmounting DMG..."
-hdiutil detach "{mount_point}" -quiet
+hdiutil detach "{mount_point}" -force -quiet
 {echo_cmd} "DMG unmounted"
+
+# Wait for filesystem to settle
+sleep 2
 
 # Set permissions and remove quarantine
 {echo_cmd} "Setting permissions..."
@@ -618,16 +674,18 @@ rm -f "$0"
             os.chmod(updater_script, 0o755)
 
             # Execute the script in background
-            subprocess.Popen(['/bin/bash', updater_script],
-                           stdin=subprocess.DEVNULL,
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL,
-                           start_new_session=True,
-                           close_fds=True)
+            subprocess.Popen(
+                ["/bin/bash", updater_script],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True,
+            )
 
         elif system == "Linux":
             updater_script = os.path.join(tempfile.gettempdir(), "update_modscan.sh")
-            with open(updater_script, 'w') as f:
+            with open(updater_script, "w") as f:
                 f.write(f"""#!/bin/bash
 sleep 2
 mv -f "{new_executable_path}" "{current_exe}"
@@ -637,6 +695,6 @@ rm -rf "{extract_dir}"
 rm "$0"
 """)
             os.chmod(updater_script, 0o755)
-            subprocess.Popen(['/bin/bash', updater_script])
+            subprocess.Popen(["/bin/bash", updater_script])
 
         QApplication.quit()
