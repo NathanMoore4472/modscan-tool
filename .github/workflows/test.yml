@@ -53,6 +53,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
 
+    - name: Start Modbus test server
+      run: |
+        python3 modbus_test_server.py --port 5020 &
+        sleep 2
+        echo "Modbus server started"
+
     - name: Run unit tests (Linux with xvfb)
       if: runner.os == 'Linux'
       run: |
@@ -72,6 +78,11 @@ jobs:
       if: runner.os != 'Linux'
       run: |
         pytest tests/integration -v --cov=. --cov-append --cov-report=xml --cov-report=term
+
+    - name: Stop Modbus test server
+      if: always()
+      run: |
+        python3 modbus_test_server.py --stop || true
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
