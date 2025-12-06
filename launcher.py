@@ -14,6 +14,9 @@ from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 
+# Application version - single source of truth
+VERSION = "1.3.4"
+
 
 def resource_path(relative_path):
     """Get absolute path to resource, works for dev and PyInstaller"""
@@ -25,23 +28,9 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-def get_version():
-    """Extract version from modscan_tool.py without importing it"""
-    try:
-        version_file = resource_path("modscan_tool.py")
-        with open(version_file, "r") as f:
-            content = f.read()
-            match = re.search(r'self\.app_version\s*=\s*["\']([^"\']+)["\']', content)
-            if match:
-                return match.group(1)
-    except:
-        pass
-    return "1.2.0"  # Fallback version
-
-
 def create_splash():
     """Create and return splash screen"""
-    version = get_version()
+    version = VERSION
 
     # Create splash pixmap
     splash_pix = QPixmap(450, 300)
@@ -54,8 +43,12 @@ def create_splash():
     logo = QPixmap(resource_path("icon.png"))
     if not logo.isNull():
         # Scale logo to 80x80 and center it at top
-        logo = logo.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio,
-                          Qt.TransformationMode.SmoothTransformation)
+        logo = logo.scaled(
+            80,
+            80,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         logo_x = (splash_pix.width() - logo.width()) // 2
         painter.drawPixmap(logo_x, 20, logo)
 
@@ -74,9 +67,12 @@ def create_splash():
     version_font = QFont("Arial", 11)
     painter.setFont(version_font)
     painter.drawText(
-        20, 190, splash_pix.width() - 40, 30,
+        20,
+        190,
+        splash_pix.width() - 40,
+        30,
         Qt.AlignmentFlag.AlignCenter,
-        f"Version {version}"
+        f"Version {version}",
     )
 
     # Author (at bottom)
@@ -127,10 +123,10 @@ def main():
     )
     app.processEvents()
 
-    window = ModbusScannerGUI()
+    window = ModbusScannerGUI(version=VERSION)
     window.show()
 
-    # Ensure splash displays for at least 1 second (non-blocking)
+    # Ensure splash displays for at least 2 second (non-blocking)
     elapsed = time.time() - splash_start
     min_splash_time = 2.0  # seconds
 
