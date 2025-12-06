@@ -132,7 +132,7 @@ class UpdateChecker:
         if system == "Windows":
             return "ModScan-Tool-Windows.zip"
         elif system == "Darwin":  # macOS
-            return "ModScan-Tool-macOS.zip"
+            return "ModScan-Tool-macOS.dmg"
         elif system == "Linux":
             return "ModScan-Tool-Linux.tar.gz"
         return None
@@ -444,17 +444,13 @@ class UpdateChecker:
 
         extract_dir = os.path.join(tempfile.gettempdir(), "modscan_update")
 
-        # Extract archive if needed
-        if system == "Darwin" and new_executable_path.endswith('.zip'):
-            # Extract zip for macOS
-            os.makedirs(extract_dir, exist_ok=True)
-            with zipfile.ZipFile(new_executable_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
-            # Find the .app bundle
+        # Mount DMG and copy app for macOS
+        if system == "Darwin" and new_executable_path.endswith('.dmg'):
+            # Mount the DMG
+            mount_point = "/Volumes/ModScan Tool"
             app_name = "ModScan Tool.app"
-            extracted_app = os.path.join(extract_dir, app_name)
-            if os.path.exists(extracted_app):
-                new_executable_path = extracted_app
+            # Will handle mounting in the shell script
+            new_executable_path = new_executable_path  # Pass DMG path to script
 
         elif system == "Linux" and new_executable_path.endswith('.tar.gz'):
             # Extract tar.gz for Linux
@@ -514,13 +510,16 @@ del "%~f0"
                 log_redirect = '# Logging disabled'
                 echo_cmd = ": #"  # No-op command
 
+            dmg_path = new_executable_path
+            mount_point = "/Volumes/ModScan Tool"
+            app_name = "ModScan Tool.app"
+
             with open(updater_script, 'w') as f:
                 f.write(f"""#!/bin/bash
 {log_redirect}
 {echo_cmd} "=== Update started at $(date) ==="
+{echo_cmd} "DMG file: {dmg_path}"
 {echo_cmd} "Current app: {current_exe}"
-{echo_cmd} "New app: {new_executable_path}"
-{echo_cmd} "Temp dir: {extract_dir}"
 {echo_cmd} ""
 
 # Wait for app to quit
@@ -544,15 +543,36 @@ done
 {echo_cmd} "App process terminated (waited $WAITED seconds)"
 sleep 2
 
+# Mount the DMG
+{echo_cmd} "Mounting DMG..."
+hdiutil attach "{dmg_path}" -nobrowse -quiet
+if [ $? -ne 0 ]; then
+    {echo_cmd} "ERROR: Failed to mount DMG"
+    exit 1
+fi
+{echo_cmd} "DMG mounted at {mount_point}"
+
+# Verify the app exists in the DMG
+if [ ! -d "{mount_point}/{app_name}" ]; then
+    {echo_cmd} "ERROR: App not found in DMG"
+    hdiutil detach "{mount_point}" -quiet
+    exit 1
+fi
+
 # Remove old app
 {echo_cmd} "Removing old app..."
 rm -rf "{current_exe}"
 {echo_cmd} "Old app removed"
 
-# Copy new app using ditto (preserves .app bundle structure and symlinks)
-{echo_cmd} "Copying new app using ditto..."
-ditto "{new_executable_path}" "{current_exe}"
+# Copy new app using ditto (preserves .app bundle structure)
+{echo_cmd} "Copying new app from DMG..."
+ditto "{mount_point}/{app_name}" "{current_exe}"
 {echo_cmd} "New app copied"
+
+# Unmount DMG
+{echo_cmd} "Unmounting DMG..."
+hdiutil detach "{mount_point}" -quiet
+{echo_cmd} "DMG unmounted"
 
 # Set permissions and remove quarantine
 {echo_cmd} "Setting permissions..."
@@ -591,7 +611,7 @@ fi
 # Cleanup
 sleep 2
 {echo_cmd} "Cleaning up..."
-rm -rf "{extract_dir}"
+rm -f "{dmg_path}"
 rm -f "$0"
 {echo_cmd} "Done at $(date)"
 """)
