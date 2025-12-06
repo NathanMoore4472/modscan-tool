@@ -74,9 +74,9 @@ jobs:
         ditto "dist/ModScan Tool.app" "dist/dmg/ModScan Tool.app"
         hdiutil create -volname "ModScan Tool" -srcfolder "dist/dmg" -ov -format UDZO "dist/ModScan-Tool-macOS.dmg"
 
-        # Create ZIP for auto-updater
+        # Create ZIP for auto-updater (preserve symlinks to keep size small)
         cd dist
-        zip -r -q "ModScan-Tool-macOS.zip" "ModScan Tool.app"
+        zip -r -q --symlinks "ModScan-Tool-macOS.zip" "ModScan Tool.app"
         cd ..
 
     - name: Build for Windows
