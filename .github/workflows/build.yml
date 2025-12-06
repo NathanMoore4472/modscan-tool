@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.11']
+        python-version: ['3.9']
 
     steps:
     - name: Checkout code
@@ -70,7 +70,8 @@ jobs:
 
         # Create DMG for manual distribution
         mkdir -p "dist/dmg"
-        cp -r "dist/ModScan Tool.app" "dist/dmg/"
+        # Use ditto instead of cp - it handles .app bundles and symlinks better
+        ditto "dist/ModScan Tool.app" "dist/dmg/ModScan Tool.app"
         hdiutil create -volname "ModScan Tool" -srcfolder "dist/dmg" -ov -format UDZO "dist/ModScan-Tool-macOS.dmg"
 
         # Create ZIP for auto-updater

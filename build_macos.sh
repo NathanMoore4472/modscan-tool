@@ -73,8 +73,8 @@ rm -f "dist/$ZIP_NAME"
 # Create temporary directory for DMG contents
 mkdir -p "$DMG_TEMP"
 
-# Copy the app
-cp -R "dist/$APP_NAME" "$DMG_TEMP/"
+# Copy the app using ditto (preserves .app bundle structure and symlinks)
+ditto "dist/$APP_NAME" "$DMG_TEMP/$APP_NAME"
 
 # Create DMG using hdiutil
 hdiutil create -volname "ModScan Tool" \

@@ -549,10 +549,10 @@ sleep 2
 rm -rf "{current_exe}"
 {echo_cmd} "Old app removed"
 
-# Move new app
-{echo_cmd} "Moving new app..."
-mv "{new_executable_path}" "{current_exe}"
-{echo_cmd} "New app moved"
+# Copy new app using ditto (preserves .app bundle structure and symlinks)
+{echo_cmd} "Copying new app using ditto..."
+ditto "{new_executable_path}" "{current_exe}"
+{echo_cmd} "New app copied"
 
 # Set permissions and remove quarantine
 {echo_cmd} "Setting permissions..."
