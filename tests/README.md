@@ -109,6 +109,31 @@ class TestMainWindow:
         assert main_window is not None
 ```
 
+## Running Modbus Integration Tests
+
+The Modbus integration tests are skipped by default. To run them:
+
+1. Start the test Modbus server:
+   ```bash
+   python3 modbus_test_server.py
+   ```
+
+2. Remove the skip marker in `tests/integration/test_modbus_communication.py`:
+   ```python
+   # Comment out this line:
+   # pytestmark = pytest.mark.skip(reason="Requires Modbus test server running on localhost:5020")
+   ```
+
+3. Run the tests:
+   ```bash
+   pytest tests/integration/test_modbus_communication.py -v
+   ```
+
+4. Stop the server when done:
+   ```bash
+   python3 modbus_test_server.py --stop
+   ```
+
 ## Continuous Integration
 
 Tests run automatically on GitHub Actions for:
@@ -116,5 +141,7 @@ Tests run automatically on GitHub Actions for:
 - Every pull request
 - Multiple Python versions (3.9, 3.10, 3.11)
 - Multiple platforms (Ubuntu, Windows, macOS)
+
+Note: Modbus integration tests are skipped in CI by default.
 
 See `.github/workflows/test.yml` for CI configuration.

@@ -9,17 +9,19 @@ from unittest.mock import Mock, MagicMock
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt6.QtWidgets import QApplication
-
 
 @pytest.fixture(scope="session")
 def qapp():
     """Create QApplication instance for GUI tests"""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-    yield app
-    # Don't quit - let pytest handle cleanup
+    try:
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        yield app
+        # Don't quit - let pytest handle cleanup
+    except ImportError:
+        pytest.skip("PyQt6 not available or missing system dependencies")
 
 
 @pytest.fixture

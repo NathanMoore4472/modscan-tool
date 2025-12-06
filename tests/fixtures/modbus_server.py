@@ -11,7 +11,7 @@ from pymodbus.datastore import ModbusSequentialDataBlock
 class TestModbusServer:
     """Test Modbus TCP server for integration testing"""
 
-    def __init__(self, host="127.0.0.1", port=5502):
+    def __init__(self, host="127.0.0.1", port=5020):
         self.host = host
         self.port = port
         self.server_thread = None
