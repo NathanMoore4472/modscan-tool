@@ -74,3 +74,11 @@ def temp_file(tmp_path):
         file_path.write_text(content)
         return str(file_path)
     return _create_temp_file
+
+
+@pytest.fixture(scope="session")
+def modbus_test_server():
+    """Fixture providing a test Modbus server (optional - requires server running)"""
+    # For now, return None to skip tests that require a server
+    # Users can start modbus_test_server.py manually if needed
+    return None
