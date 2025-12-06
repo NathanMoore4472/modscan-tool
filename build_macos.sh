@@ -87,10 +87,10 @@ rm -rf "$DMG_TEMP"
 
 echo "✓ DMG created: dist/$DMG_NAME"
 
-# Create ZIP for auto-updater
+# Create ZIP for auto-updater (preserve symlinks to keep size small)
 echo "Creating ZIP for auto-updater..."
 cd dist
-zip -r -q "$ZIP_NAME" "$APP_NAME"
+zip -r -q --symlinks "$ZIP_NAME" "$APP_NAME"
 cd ..
 
 echo "✓ ZIP created: dist/$ZIP_NAME"
