@@ -104,19 +104,23 @@ def main():
     app.processEvents()
 
     window = ModbusScannerGUI()
-    window.show()
+
+    # Helper function to finish splash and show main window
+    def finish_and_show():
+        splash.finish(window)
+        window.show()
 
     # Ensure splash displays for at least 1 second (non-blocking)
     elapsed = time.time() - splash_start
     min_splash_time = 1.0  # seconds
 
     if elapsed < min_splash_time:
-        # Use QTimer to close splash after remaining time (keeps app responsive)
+        # Use QTimer to close splash and show window after remaining time
         delay_ms = int((min_splash_time - elapsed) * 1000)
-        QTimer.singleShot(delay_ms, lambda: splash.finish(window))
+        QTimer.singleShot(delay_ms, finish_and_show)
     else:
-        # Close splash immediately if enough time has passed
-        splash.finish(window)
+        # Close splash and show window immediately if enough time has passed
+        finish_and_show()
 
     # Run application
     sys.exit(app.exec())
