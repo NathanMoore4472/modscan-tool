@@ -10,14 +10,14 @@ import re
 
 # Import only minimal PyQt6 for splash screen (fast)
 from PyQt6.QtWidgets import QApplication, QSplashScreen
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QPainter, QFont
 
 
 def get_version():
     """Extract version from modscan_tool.py without importing it"""
     try:
-        with open('modscan_tool.py', 'r') as f:
+        with open("modscan_tool.py", "r") as f:
             content = f.read()
             match = re.search(r'self\.app_version\s*=\s*["\']([^"\']+)["\']', content)
             if match:
@@ -42,24 +42,28 @@ def create_splash():
     # Title
     title_font = QFont("Arial", 28, QFont.Weight.Bold)
     painter.setFont(title_font)
-    painter.drawText(splash_pix.rect(),
-                     Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop,
-                     "\n\nModScan Tool")
+    painter.drawText(
+        splash_pix.rect(),
+        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop,
+        "\n\nModScan Tool",
+    )
 
     # Version
     version_font = QFont("Arial", 11)
     painter.setFont(version_font)
-    painter.drawText(splash_pix.rect(),
-                     Qt.AlignmentFlag.AlignCenter,
-                     f"Version {version}")
+    painter.drawText(
+        splash_pix.rect(), Qt.AlignmentFlag.AlignCenter, f"Version {version}"
+    )
 
     # Author
     author_font = QFont("Arial", 10)
     painter.setFont(author_font)
     painter.setPen(Qt.GlobalColor.darkGray)
-    painter.drawText(splash_pix.rect(),
-                     Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom,
-                     "by Nathan Moore\n\n")
+    painter.drawText(
+        splash_pix.rect(),
+        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom,
+        "by Nathan Moore\n\n",
+    )
 
     painter.end()
 
@@ -82,29 +86,37 @@ def main():
 
     # Now import the heavy main application module
     # This happens while splash is visible
-    splash.showMessage("Loading modules...",
-                      Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter,
-                      Qt.GlobalColor.black)
+    splash.showMessage(
+        "Loading modules...",
+        Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter,
+        Qt.GlobalColor.black,
+    )
     app.processEvents()
 
     from modscan_tool import ModbusScannerGUI
 
     # Create main window
-    splash.showMessage("Starting application...",
-                      Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter,
-                      Qt.GlobalColor.black)
+    splash.showMessage(
+        "Starting application...",
+        Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter,
+        Qt.GlobalColor.black,
+    )
     app.processEvents()
 
     window = ModbusScannerGUI()
     window.show()
 
-    # Ensure splash displays for at least 1 second
+    # Ensure splash displays for at least 1 second (non-blocking)
     elapsed = time.time() - splash_start
-    if elapsed < 1.0:
-        time.sleep(1.0 - elapsed)
+    min_splash_time = 1.0  # seconds
 
-    # Close splash screen
-    splash.finish(window)
+    if elapsed < min_splash_time:
+        # Use QTimer to close splash after remaining time (keeps app responsive)
+        delay_ms = int((min_splash_time - elapsed) * 1000)
+        QTimer.singleShot(delay_ms, lambda: splash.finish(window))
+    else:
+        # Close splash immediately if enough time has passed
+        splash.finish(window)
 
     # Run application
     sys.exit(app.exec())
