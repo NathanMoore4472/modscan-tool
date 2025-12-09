@@ -61,32 +61,43 @@ class TestTelemetryIntegration:
         """
         Test connection to Supabase backend
 
-        Note: This test sends one test record to verify connectivity.
-        Test records use UUID 00000000-0000-0000-0000-000000000000 for easy filtering.
+        Note: This test sends one record with real OS/version data per test run.
+        Data is sent to 'telemetry_test' table (separate from production 'telemetry' table).
         """
         import analytics_config as config
         from analytics.backends.supabase import SupabaseBackend
+        import platform
+        from datetime import datetime
+
+        # Get actual app version
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+            from launcher import VERSION
+            app_version = f"test-{VERSION}"
+        except ImportError:
+            app_version = "test-unknown"
 
         # Only run if Supabase is configured
         if config.BACKEND_TYPE != 'supabase':
             pytest.skip("Supabase backend not selected")
 
-        backend = SupabaseBackend(config.SUPABASE_URL, config.SUPABASE_KEY)
+        # Use separate table for test data
+        backend = SupabaseBackend(config.SUPABASE_URL, config.SUPABASE_KEY, table_name="telemetry_test")
 
         # Verify backend is configured
         assert backend.is_configured(), "Supabase backend should be configured"
 
-        # Test data to send (one record per test run)
+        # Test data with REAL OS/version info (one record per test run)
         test_data = {
             "user_id": "00000000-0000-0000-0000-000000000000",  # Test UUID for filtering
-            "app_version": "test-1.0.0",
-            "os": "test-os",
-            "os_version": "test-version",
-            "os_release": "test-release",
-            "python_version": "3.9.0",
-            "install_date": "2024-01-01T00:00:00",
+            "app_version": app_version,  # e.g., "test-1.4.1"
+            "os": platform.system(),  # Real OS: Darwin, Linux, Windows
+            "os_version": platform.version(),  # Real OS version
+            "os_release": platform.release(),  # Real OS release
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "install_date": datetime.now().isoformat(),
             "launch_count": 1,
-            "timestamp": "2024-01-01T00:00:00"
+            "timestamp": datetime.now().isoformat()
         }
 
         # Try to send test data

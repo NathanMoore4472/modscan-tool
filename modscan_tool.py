@@ -79,9 +79,11 @@ class ModbusScannerGUI(QMainWindow):
         # Initialize update checker
         self.updater = UpdateChecker(self.app_version, self.settings, self)
 
-        # Initialize telemetry
-        backend = get_backend()
-        self.telemetry = TelemetryClient(self.app_version, self.settings, backend)
+        # Initialize telemetry (disabled in test environment)
+        import os
+        is_testing = os.environ.get('PYTEST_CURRENT_TEST') or 'Test' in self.settings.organizationName()
+        backend = get_backend() if not is_testing else None
+        self.telemetry = TelemetryClient(self.app_version, self.settings, backend) if not is_testing else None
 
         # Connect signals
         self.signals.log.connect(self.log_message)
@@ -104,8 +106,9 @@ class ModbusScannerGUI(QMainWindow):
             print("Scheduling update check in 1 second...")
             QTimer.singleShot(3000, lambda: self.updater.check_for_updates(silent=True))
 
-        # Send telemetry data (if enabled)
-        self.telemetry.send_telemetry(background=True)
+        # Send telemetry data (if enabled and not in test environment)
+        if self.telemetry:
+            self.telemetry.send_telemetry(background=True)
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -564,7 +567,7 @@ Built with Python, PyQt6, and pymodbus
             )
 
             # Update telemetry client if it exists
-            if hasattr(self, 'telemetry'):
+            if hasattr(self, 'telemetry') and self.telemetry:
                 self.telemetry.telemetry_enabled = telemetry_cb.isChecked()
 
     def log_message(self, message, tag):
