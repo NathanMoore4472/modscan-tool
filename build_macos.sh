@@ -53,6 +53,7 @@ pyinstaller --clean --noconfirm \
     --add-data "icon.png:." \
     --add-data "analytics_config.py:." \
     --add-data "analytics:analytics" \
+    --hidden-import=certifi \
     $ICON_ARG \
     launcher.py
 

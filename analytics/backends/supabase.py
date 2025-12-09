@@ -7,9 +7,17 @@ Sends telemetry data to Supabase (PostgreSQL) database.
 import json
 import urllib.request
 import urllib.error
+import ssl
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+# Use certifi for SSL verification in PyInstaller builds
+try:
+    import certifi
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    SSL_CONTEXT = None
 
 
 def _debug_log(message: str):
@@ -86,8 +94,8 @@ class SupabaseBackend:
             )
 
             _debug_log("Sending POST request to Supabase...")
-            # Send request
-            with urllib.request.urlopen(req, timeout=5) as response:
+            # Send request with SSL context
+            with urllib.request.urlopen(req, timeout=5, context=SSL_CONTEXT) as response:
                 _debug_log(f"Response status: {response.status}")
                 if response.status in [200, 201]:
                     _debug_log("Success!")
