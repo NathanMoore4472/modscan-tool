@@ -51,6 +51,8 @@ pyinstaller --clean --noconfirm \
     --windowed \
     --onedir \
     --add-data "icon.png:." \
+    --add-data "analytics_config.py:." \
+    --add-data "analytics:analytics" \
     $ICON_ARG \
     launcher.py
 
