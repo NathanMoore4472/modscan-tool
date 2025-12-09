@@ -7,7 +7,20 @@ Sends telemetry data to Supabase (PostgreSQL) database.
 import json
 import urllib.request
 import urllib.error
+from pathlib import Path
+from datetime import datetime
 from typing import Dict, Any, Optional
+
+
+def _debug_log(message: str):
+    """Write debug message to telemetry log file"""
+    try:
+        log_file = Path.home() / "Desktop" / "modscan_telemetry_debug.log"
+        with open(log_file, 'a') as f:
+            timestamp = datetime.now().isoformat()
+            f.write(f"[{timestamp}] [Supabase] {message}\n")
+    except Exception:
+        pass
 
 
 class SupabaseBackend:
@@ -40,13 +53,17 @@ class SupabaseBackend:
         Returns:
             True if successful, False otherwise
         """
+        _debug_log("send() called")
         if not self.is_configured():
-            print("Supabase backend not configured (URL or key missing)")
+            msg = "Supabase backend not configured (URL or key missing)"
+            _debug_log(msg)
+            print(msg)
             return False
 
         try:
             # Supabase REST API endpoint
             endpoint = f"{self.url}/rest/v1/{self.table_name}"
+            _debug_log(f"Endpoint: {endpoint}")
 
             # Prepare request
             headers = {
@@ -58,6 +75,7 @@ class SupabaseBackend:
 
             # Convert data to JSON
             payload = json.dumps(data).encode('utf-8')
+            _debug_log(f"Payload size: {len(payload)} bytes")
 
             # Create request
             req = urllib.request.Request(
@@ -67,22 +85,39 @@ class SupabaseBackend:
                 method='POST'
             )
 
+            _debug_log("Sending POST request to Supabase...")
             # Send request
             with urllib.request.urlopen(req, timeout=5) as response:
+                _debug_log(f"Response status: {response.status}")
                 if response.status in [200, 201]:
+                    _debug_log("Success!")
                     return True
                 else:
-                    print(f"Supabase error: HTTP {response.status}")
+                    msg = f"Supabase error: HTTP {response.status}"
+                    _debug_log(msg)
+                    print(msg)
                     return False
 
         except urllib.error.HTTPError as e:
-            print(f"Supabase HTTP error: {e.code} - {e.reason}")
+            # Read error response body
+            try:
+                error_body = e.read().decode('utf-8')
+                _debug_log(f"HTTP error body: {error_body}")
+            except:
+                pass
+            msg = f"Supabase HTTP error: {e.code} - {e.reason}"
+            _debug_log(msg)
+            print(msg)
             return False
         except urllib.error.URLError as e:
-            print(f"Supabase connection error: {e.reason}")
+            msg = f"Supabase connection error: {e.reason}"
+            _debug_log(msg)
+            print(msg)
             return False
         except Exception as e:
-            print(f"Supabase unexpected error: {e}")
+            msg = f"Supabase unexpected error: {e}"
+            _debug_log(msg)
+            print(msg)
             return False
 
     @staticmethod
