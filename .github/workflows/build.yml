@@ -46,6 +46,7 @@ jobs:
         HTTP_API_KEY = None
         TELEMETRY_ENABLED_BY_DEFAULT = True
         TELEMETRY_DEBUG = False
+        DEVELOPER_USER_IDS = ['ac745f73-b603-423c-b2ab-4943aa997a17']
         EOF
       shell: bash
 
