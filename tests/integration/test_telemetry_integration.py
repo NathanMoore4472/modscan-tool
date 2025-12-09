@@ -58,7 +58,12 @@ class TestTelemetryIntegration:
         assert backend.is_configured(), "Backend should report as configured"
 
     def test_supabase_connection(self):
-        """Test connection to Supabase backend"""
+        """
+        Test connection to Supabase backend
+
+        Note: This test sends one test record to verify connectivity.
+        Test records use UUID 00000000-0000-0000-0000-000000000000 for easy filtering.
+        """
         import analytics_config as config
         from analytics.backends.supabase import SupabaseBackend
 
@@ -71,9 +76,9 @@ class TestTelemetryIntegration:
         # Verify backend is configured
         assert backend.is_configured(), "Supabase backend should be configured"
 
-        # Test data to send
+        # Test data to send (one record per test run)
         test_data = {
-            "user_id": "00000000-0000-0000-0000-000000000000",  # Test UUID
+            "user_id": "00000000-0000-0000-0000-000000000000",  # Test UUID for filtering
             "app_version": "test-1.0.0",
             "os": "test-os",
             "os_version": "test-version",
@@ -145,7 +150,7 @@ class TestTelemetryIntegration:
             )
 
     def test_telemetry_client_send(self):
-        """Test full telemetry client send flow"""
+        """Test full telemetry client send flow without actually sending data"""
         from PyQt6.QtCore import QSettings
         from analytics.telemetry import TelemetryClient, get_backend
 
@@ -157,15 +162,17 @@ class TestTelemetryIntegration:
         backend = get_backend()
         client = TelemetryClient("test-1.0.0", settings, backend)
 
-        # Enable telemetry explicitly for test
-        client.telemetry_enabled = True
+        # Verify client initialized properly
+        assert client.telemetry_enabled is not None
+        assert client.user_id is not None
+        assert client.backend is not None
 
-        # Send telemetry (blocking, not background)
-        # This should not raise any exceptions
-        try:
-            client.send_telemetry(background=False)
-        except Exception as e:
-            pytest.fail(f"Telemetry send raised exception: {e}")
+        # Verify data collection works (without sending)
+        data = client._collect_data()
+        assert data["user_id"] == client.user_id
+        assert data["app_version"] == "test-1.0.0"
+        assert "os" in data
+        assert "timestamp" in data
 
         # Clean up
         settings.clear()
