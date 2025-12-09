@@ -17,8 +17,16 @@ from typing import Optional, Dict, Any
 
 
 def _debug_log(message: str):
-    """Write debug message to telemetry log file"""
+    """Write debug message to telemetry log file (only if TELEMETRY_DEBUG is enabled)"""
     try:
+        # Only log if debug mode is enabled
+        try:
+            import analytics_config as config
+            if not getattr(config, 'TELEMETRY_DEBUG', False):
+                return
+        except ImportError:
+            return
+
         # Write to Desktop for easy access
         log_file = Path.home() / "Desktop" / "modscan_telemetry_debug.log"
         with open(log_file, 'a') as f:
