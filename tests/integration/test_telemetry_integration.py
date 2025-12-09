@@ -13,30 +13,36 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 def is_telemetry_configured():
-    """Check if telemetry backend is configured with credentials"""
-    try:
-        import analytics_config as config
+    """
+    Check if telemetry backend is configured with credentials
 
-        backend_type = getattr(config, 'BACKEND_TYPE', None)
+    Returns:
+        bool: True if credentials are configured, False if not
 
-        if backend_type == 'supabase':
-            url = getattr(config, 'SUPABASE_URL', None)
-            key = getattr(config, 'SUPABASE_KEY', None)
-            # Check if credentials are actually set (not None or empty)
-            return bool(url and key and url != 'None' and key != 'None')
-        elif backend_type == 'http':
-            endpoint = getattr(config, 'HTTP_ENDPOINT_URL', None)
-            return bool(endpoint and endpoint != 'None')
+    Raises:
+        ImportError: If analytics_config.py is missing (should fail the test)
+    """
+    import analytics_config as config
 
-        return False
-    except ImportError:
-        return False
+    backend_type = getattr(config, 'BACKEND_TYPE', None)
+
+    if backend_type == 'supabase':
+        url = getattr(config, 'SUPABASE_URL', None)
+        key = getattr(config, 'SUPABASE_KEY', None)
+        # Check if credentials are actually set (not None or empty)
+        return bool(url and key and url != 'None' and key != 'None')
+    elif backend_type == 'http':
+        endpoint = getattr(config, 'HTTP_ENDPOINT_URL', None)
+        return bool(endpoint and endpoint != 'None')
+
+    return False
 
 
-# Skip all tests in this module if telemetry is not configured
+# Skip all tests in this module if credentials are not configured
+# Note: If analytics_config.py is missing entirely, ImportError will fail the tests (not skip)
 pytestmark = pytest.mark.skipif(
     not is_telemetry_configured(),
-    reason="Telemetry backend not configured (analytics_config.py missing or credentials not set)"
+    reason="Telemetry credentials not configured (SUPABASE_URL/KEY or HTTP_ENDPOINT_URL not set)"
 )
 
 
