@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 
 from updater import UpdateChecker
+from analytics.telemetry import TelemetryClient, get_backend
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -78,6 +79,10 @@ class ModbusScannerGUI(QMainWindow):
         # Initialize update checker
         self.updater = UpdateChecker(self.app_version, self.settings, self)
 
+        # Initialize telemetry
+        backend = get_backend()
+        self.telemetry = TelemetryClient(self.app_version, self.settings, backend)
+
         # Connect signals
         self.signals.log.connect(self.log_message)
         self.signals.status.connect(self.update_status)
@@ -98,6 +103,9 @@ class ModbusScannerGUI(QMainWindow):
 
             print("Scheduling update check in 1 second...")
             QTimer.singleShot(3000, lambda: self.updater.check_for_updates(silent=True))
+
+        # Send telemetry data (if enabled)
+        self.telemetry.send_telemetry(background=True)
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -505,6 +513,30 @@ Built with Python, PyQt6, and pymodbus
         update_group.setLayout(update_layout)
         layout.addWidget(update_group)
 
+        # Privacy Settings group
+        privacy_group = QGroupBox("Privacy Settings")
+        privacy_layout = QVBoxLayout()
+
+        # Checkbox for telemetry
+        telemetry_cb = QCheckBox("Send anonymous usage data")
+        telemetry_cb.setChecked(self.settings.value("telemetry_enabled", True, type=bool))
+        telemetry_cb.setToolTip(
+            "Help improve ModScan Tool by sending anonymous usage statistics"
+        )
+        privacy_layout.addWidget(telemetry_cb)
+
+        # Info label
+        info_label = QLabel(
+            "<small>Collected data: app version, OS type/version, install date, launch count.<br>"
+            "NOT collected: IP address, personal info, Modbus data, or file paths.</small>"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #666; padding: 5px;")
+        privacy_layout.addWidget(info_label)
+
+        privacy_group.setLayout(privacy_layout)
+        layout.addWidget(privacy_group)
+
         # Dialog buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -527,6 +559,13 @@ Built with Python, PyQt6, and pymodbus
             self.settings.setValue(
                 "update_debug_logging", self.updater.update_debug_logging
             )
+            self.settings.setValue(
+                "telemetry_enabled", telemetry_cb.isChecked()
+            )
+
+            # Update telemetry client if it exists
+            if hasattr(self, 'telemetry'):
+                self.telemetry.telemetry_enabled = telemetry_cb.isChecked()
 
     def log_message(self, message, tag):
         """Display a log message in the info label"""

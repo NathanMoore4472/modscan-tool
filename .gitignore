@@ -46,3 +46,6 @@ coverage.xml
 .tox/
 *.cover
 .hypothesis/
+
+# Analytics configuration (contains credentials)
+analytics_config.py

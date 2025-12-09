@@ -36,6 +36,19 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller pillow certifi
 
+    - name: Create analytics config
+      run: |
+        cat > analytics_config.py << 'EOF'
+        BACKEND_TYPE = 'supabase'
+        SUPABASE_URL = '${{ secrets.SUPABASE_URL }}'
+        SUPABASE_KEY = '${{ secrets.SUPABASE_KEY }}'
+        HTTP_ENDPOINT_URL = None
+        HTTP_API_KEY = None
+        TELEMETRY_ENABLED_BY_DEFAULT = True
+        TELEMETRY_DEBUG = False
+        EOF
+      shell: bash
+
     - name: Build for macOS
       if: matrix.os == 'macos-latest'
       run: |
