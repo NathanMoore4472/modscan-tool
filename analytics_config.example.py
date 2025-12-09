@@ -18,3 +18,9 @@ HTTP_API_KEY = 'your-api-key-here'
 # Telemetry settings
 TELEMETRY_ENABLED_BY_DEFAULT = True
 TELEMETRY_DEBUG = False
+
+# Developer user IDs - automatically enable debug features for these users
+# Add your user_id here to enable debug logging (find it in QSettings or debug log)
+DEVELOPER_USER_IDS = [
+    # 'your-uuid-here',
+]

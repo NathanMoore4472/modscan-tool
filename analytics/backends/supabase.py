@@ -20,15 +20,36 @@ except ImportError:
     SSL_CONTEXT = None
 
 
-def _debug_log(message: str):
-    """Write debug message to telemetry log file (only if TELEMETRY_DEBUG is enabled)"""
+def _is_developer_mode() -> bool:
+    """Check if debug mode should be enabled (TELEMETRY_DEBUG or developer user_id)"""
     try:
-        # Only log if debug mode is enabled
-        try:
-            import analytics_config as config
-            if not getattr(config, 'TELEMETRY_DEBUG', False):
-                return
-        except ImportError:
+        import analytics_config as config
+
+        # Check if explicitly enabled
+        if getattr(config, 'TELEMETRY_DEBUG', False):
+            return True
+
+        # Check if user is a developer
+        developer_ids = getattr(config, 'DEVELOPER_USER_IDS', [])
+        if developer_ids:
+            try:
+                from PyQt6.QtCore import QSettings
+                settings = QSettings("ModScanTool", "ModbusScannerGUI")
+                user_id = settings.value("telemetry_user_id", None)
+                if user_id and user_id in developer_ids:
+                    return True
+            except Exception:
+                pass
+
+        return False
+    except ImportError:
+        return False
+
+
+def _debug_log(message: str):
+    """Write debug message to telemetry log file (only if debug mode is enabled)"""
+    try:
+        if not _is_developer_mode():
             return
 
         log_file = Path.home() / "Desktop" / "modscan_telemetry_debug.log"
