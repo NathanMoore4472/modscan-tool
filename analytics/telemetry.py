@@ -110,12 +110,25 @@ class TelemetryClient:
         install_date = self.settings.value("telemetry_install_date")
         launch_count = self.settings.value("telemetry_launch_count", 0, type=int)
 
+        # Get user-friendly OS information
+        os_name = platform.system()
+        if os_name == "Darwin":
+            # macOS - get user-friendly version
+            mac_ver = platform.mac_ver()[0]  # e.g., "15.4"
+            os_name = "macOS"
+            os_version = mac_ver if mac_ver else platform.release()
+            os_release = platform.release()  # Kernel version like "24.4.0"
+        else:
+            # Windows, Linux, etc.
+            os_version = platform.version()
+            os_release = platform.release()
+
         return {
             "user_id": self.user_id,
             "app_version": self.app_version,
-            "os": platform.system(),
-            "os_version": platform.version(),
-            "os_release": platform.release(),
+            "os": os_name,
+            "os_version": os_version,
+            "os_release": os_release,
             "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             "install_date": install_date,
             "launch_count": launch_count,
