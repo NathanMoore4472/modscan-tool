@@ -48,6 +48,7 @@ def _fetch_user_roles(user_id: str, postgres_url: str) -> List[str]:
 
         headers = {
             "Content-Type": "application/json",
+            "User-Agent": "ModScan-Tool-Telemetry/1.0",
         }
 
         payload = json.dumps({"user_uuid": user_id}).encode("utf-8")
@@ -185,6 +186,7 @@ class PostgresBackend:
             headers = {
                 "Content-Type": "application/json",
                 "Prefer": "return=minimal",  # Don't return inserted data
+                "User-Agent": "ModScan-Tool-Telemetry/1.0",
             }
 
             # Convert data to JSON
