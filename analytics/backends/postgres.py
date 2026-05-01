@@ -1,7 +1,8 @@
 """
-Supabase Backend Adapter
+PostgreSQL Backend Adapter (via PostgREST)
 
-Sends telemetry data to Supabase (PostgreSQL) database.
+Sends telemetry data to PostgreSQL database via PostgREST REST API.
+Similar to Supabase backend but uses direct PostgreSQL + PostgREST.
 """
 
 import json
@@ -15,6 +16,7 @@ from typing import Dict, Any, Optional, List
 # Use certifi for SSL verification in PyInstaller builds
 try:
     import certifi
+
     SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
     SSL_CONTEXT = None
@@ -23,14 +25,13 @@ except ImportError:
 _USER_ROLES_CACHE: Optional[List[str]] = None
 
 
-def _fetch_user_roles(user_id: str, supabase_url: str, supabase_key: str) -> List[str]:
+def _fetch_user_roles(user_id: str, postgres_url: str) -> List[str]:
     """
-    Fetch user roles from Supabase known_users table
+    Fetch user roles from PostgreSQL known_users table via PostgREST
 
     Args:
         user_id: User UUID to look up
-        supabase_url: Supabase project URL
-        supabase_key: Supabase anon key
+        postgres_url: PostgREST base URL (e.g., http://192.168.1.72:3001)
 
     Returns:
         List of role strings (e.g., ['developer', 'admin', 'debug'])
@@ -42,27 +43,22 @@ def _fetch_user_roles(user_id: str, supabase_url: str, supabase_key: str) -> Lis
         return _USER_ROLES_CACHE
 
     try:
-        # Call the get_user_roles() function via Supabase RPC
-        endpoint = f"{supabase_url}/rest/v1/rpc/get_user_roles"
+        # Call the get_user_roles() function via PostgREST RPC
+        endpoint = f"{postgres_url}/rpc/get_user_roles"
 
         headers = {
-            "apikey": supabase_key,
-            "Authorization": f"Bearer {supabase_key}",
             "Content-Type": "application/json",
         }
 
-        payload = json.dumps({"user_uuid": user_id}).encode('utf-8')
+        payload = json.dumps({"user_uuid": user_id}).encode("utf-8")
 
         req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers=headers,
-            method='POST'
+            endpoint, data=payload, headers=headers, method="POST"
         )
 
         with urllib.request.urlopen(req, timeout=3, context=SSL_CONTEXT) as response:
             if response.status == 200:
-                roles = json.loads(response.read().decode('utf-8'))
+                roles = json.loads(response.read().decode("utf-8"))
                 # Cache the result
                 _USER_ROLES_CACHE = roles if isinstance(roles, list) else []
                 return _USER_ROLES_CACHE
@@ -75,12 +71,13 @@ def _fetch_user_roles(user_id: str, supabase_url: str, supabase_key: str) -> Lis
         return []
 
 
-def _has_role(role: str) -> bool:
+def _has_role(role: str, postgres_url: str) -> bool:
     """
     Check if current user has a specific role
 
     Args:
         role: Role name to check (e.g., 'developer', 'admin', 'beta', 'debug')
+        postgres_url: PostgREST base URL
 
     Returns:
         True if user has the role, False otherwise
@@ -96,22 +93,15 @@ def _has_role(role: str) -> bool:
         if not user_id:
             return False
 
-        # Get Supabase credentials
-        supabase_url = getattr(config, 'SUPABASE_URL', None)
-        supabase_key = getattr(config, 'SUPABASE_KEY', None)
-
-        if not supabase_url or not supabase_key:
-            return False
-
         # Fetch roles and check
-        roles = _fetch_user_roles(user_id, supabase_url, supabase_key)
+        roles = _fetch_user_roles(user_id, postgres_url)
         return role.lower() in [r.lower() for r in roles]
 
     except Exception:
         return False
 
 
-def _is_developer_mode() -> bool:
+def _is_developer_mode(postgres_url: str) -> bool:
     """
     Check if debug mode should be enabled
 
@@ -124,11 +114,11 @@ def _is_developer_mode() -> bool:
         import analytics_config as config
 
         # Check if explicitly enabled
-        if getattr(config, 'TELEMETRY_DEBUG', False):
+        if getattr(config, "TELEMETRY_DEBUG", False):
             return True
 
         # Check if user has 'developer' or 'debug' role
-        return _has_role('developer') or _has_role('debug')
+        return _has_role("developer", postgres_url) or _has_role("debug", postgres_url)
 
     except ImportError:
         return False
@@ -137,40 +127,41 @@ def _is_developer_mode() -> bool:
 def _debug_log(message: str):
     """Write debug message to telemetry log file (only if debug mode is enabled)"""
     try:
-        if not _is_developer_mode():
+        # Can't check debug mode here without postgres_url, so check directly
+        import analytics_config as config
+
+        if not getattr(config, "TELEMETRY_DEBUG", False):
             return
 
         log_file = Path.home() / "Desktop" / "modscan_telemetry_debug.log"
-        with open(log_file, 'a') as f:
+        with open(log_file, "a") as f:
             timestamp = datetime.now().isoformat()
-            f.write(f"[{timestamp}] [Supabase] {message}\n")
+            f.write(f"[{timestamp}] [PostgreSQL] {message}\n")
     except Exception:
         pass
 
 
-class SupabaseBackend:
-    """Supabase backend for telemetry data"""
+class PostgresBackend:
+    """PostgreSQL backend for telemetry data (via PostgREST)"""
 
-    def __init__(self, url: Optional[str] = None, key: Optional[str] = None, table_name: str = "telemetry"):
+    def __init__(self, url: Optional[str] = None, table_name: str = "telemetry"):
         """
-        Initialize Supabase backend
+        Initialize PostgreSQL backend
 
         Args:
-            url: Supabase project URL (e.g., https://xxxxx.supabase.co)
-            key: Supabase anon/public key
+            url: PostgREST URL (e.g., http://192.168.1.72:3001)
             table_name: Database table name (default: "telemetry", use "telemetry_test" for CI tests)
         """
         self.url = url
-        self.key = key
         self.table_name = table_name
 
     def is_configured(self) -> bool:
         """Check if backend is properly configured"""
-        return bool(self.url and self.key)
+        return bool(self.url)
 
     def send(self, data: Dict[str, Any]) -> bool:
         """
-        Send telemetry data to Supabase
+        Send telemetry data to PostgreSQL via PostgREST
 
         Args:
             data: Telemetry data dictionary
@@ -180,45 +171,42 @@ class SupabaseBackend:
         """
         _debug_log("send() called")
         if not self.is_configured():
-            msg = "Supabase backend not configured (URL or key missing)"
+            msg = "PostgreSQL backend not configured (URL missing)"
             _debug_log(msg)
             print(msg)
             return False
 
         try:
-            # Supabase REST API endpoint
-            endpoint = f"{self.url}/rest/v1/{self.table_name}"
+            # PostgREST REST API endpoint
+            endpoint = f"{self.url}/{self.table_name}"
             _debug_log(f"Endpoint: {endpoint}")
 
             # Prepare request
             headers = {
-                "apikey": self.key,
-                "Authorization": f"Bearer {self.key}",
                 "Content-Type": "application/json",
                 "Prefer": "return=minimal",  # Don't return inserted data
             }
 
             # Convert data to JSON
-            payload = json.dumps(data).encode('utf-8')
+            payload = json.dumps(data).encode("utf-8")
             _debug_log(f"Payload size: {len(payload)} bytes")
 
             # Create request
             req = urllib.request.Request(
-                endpoint,
-                data=payload,
-                headers=headers,
-                method='POST'
+                endpoint, data=payload, headers=headers, method="POST"
             )
 
-            _debug_log("Sending POST request to Supabase...")
+            _debug_log("Sending POST request to PostgREST...")
             # Send request with SSL context
-            with urllib.request.urlopen(req, timeout=5, context=SSL_CONTEXT) as response:
+            with urllib.request.urlopen(
+                req, timeout=5, context=SSL_CONTEXT
+            ) as response:
                 _debug_log(f"Response status: {response.status}")
                 if response.status in [200, 201]:
                     _debug_log("Success!")
                     return True
                 else:
-                    msg = f"Supabase error: HTTP {response.status}"
+                    msg = f"PostgreSQL error: HTTP {response.status}"
                     _debug_log(msg)
                     print(msg)
                     return False
@@ -226,75 +214,52 @@ class SupabaseBackend:
         except urllib.error.HTTPError as e:
             # Read error response body
             try:
-                error_body = e.read().decode('utf-8')
+                error_body = e.read().decode("utf-8")
                 _debug_log(f"HTTP error body: {error_body}")
             except:
                 pass
-            msg = f"Supabase HTTP error: {e.code} - {e.reason}"
+            msg = f"PostgreSQL HTTP error: {e.code} - {e.reason}"
             _debug_log(msg)
             print(msg)
             return False
         except urllib.error.URLError as e:
-            msg = f"Supabase connection error: {e.reason}"
+            msg = f"PostgreSQL connection error: {e.reason}"
             _debug_log(msg)
             print(msg)
             return False
         except Exception as e:
-            msg = f"Supabase unexpected error: {e}"
+            msg = f"PostgreSQL unexpected error: {e}"
             _debug_log(msg)
             print(msg)
             return False
 
     @staticmethod
-    def get_table_schema(table_name: str = "telemetry") -> str:
+    def get_setup_instructions() -> str:
         """
-        Get SQL schema for creating a telemetry table in Supabase
-
-        Args:
-            table_name: Name of the table to create (default: "telemetry")
+        Get setup instructions for PostgreSQL RLS configuration
 
         Returns:
-            SQL CREATE TABLE statement
+            Setup instructions and SQL script reference
         """
-        return f"""
--- Create {table_name} table in Supabase
-CREATE TABLE {table_name} (
-    id BIGSERIAL PRIMARY KEY,
-    user_id UUID NOT NULL,
-    app_version TEXT NOT NULL,
-    os TEXT NOT NULL,
-    os_version TEXT,
-    os_release TEXT,
-    python_version TEXT,
-    install_date TIMESTAMP,
-    launch_count INTEGER,
-    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMP DEFAULT NOW()
-);
+        return """
+PostgreSQL RLS Setup Required:
 
--- Create index on user_id for faster queries
-CREATE INDEX idx_{table_name}_user_id ON {table_name}(user_id);
+1. Run setup_postgres.sql against your appdb database:
+   psql -h 192.168.1.72 -U postgres -d appdb -f setup_postgres.sql
 
--- Create index on app_version for version tracking
-CREATE INDEX idx_{table_name}_app_version ON {table_name}(app_version);
+2. This creates:
+   - RLS policies on telemetry, telemetry_test tables
+   - get_user_roles(user_uuid) RPC function
+   - Enables postgREST to safely expose REST API
 
--- Create index on timestamp for time-based queries
-CREATE INDEX idx_{table_name}_timestamp ON {table_name}(timestamp);
+3. PostgREST Configuration:
+   - Ensure postgREST is configured with:
+     - db_uri: "postgres://[user]:[pass]@192.168.1.72:5432/appdb"
+     - db_anon_role: "anon"
+     - Port: 3001
 
--- Enable Row Level Security (RLS)
-ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
-
--- Create policy to allow anonymous inserts (for telemetry)
-CREATE POLICY "Allow anonymous {table_name} inserts"
-ON {table_name}
-FOR INSERT
-TO anon
-WITH CHECK (true);
-
--- Create policy to allow authenticated reads (for analytics dashboard)
-CREATE POLICY "Allow authenticated {table_name} reads"
-ON {table_name}
-FOR SELECT
-TO authenticated
-USING (true);
+4. Security Model:
+   - App (unauthenticated) can INSERT telemetry (anon role)
+   - App cannot READ telemetry (RLS denies SELECT)
+   - Dashboard/admin uses authenticated role to READ telemetry
         """

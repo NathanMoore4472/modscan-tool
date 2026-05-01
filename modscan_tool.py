@@ -448,6 +448,36 @@ class ModbusScannerGUI(QMainWindow):
         except:
             pyqt_version = "unknown"
 
+        # Get user ID and roles for display
+        user_id = self.settings.value("telemetry_user_id", None)
+        user_roles = []
+
+        if user_id:
+            try:
+                from analytics.backends.supabase import _fetch_user_roles
+                import analytics_config as config
+
+                supabase_url = getattr(config, 'SUPABASE_URL', None)
+                supabase_key = getattr(config, 'SUPABASE_KEY', None)
+
+                if supabase_url and supabase_key:
+                    user_roles = _fetch_user_roles(user_id, supabase_url, supabase_key)
+            except Exception:
+                pass  # If role fetch fails, just don't show roles
+
+        # Build user info section - always show if user_id exists
+        user_info_section = ""
+        if user_id:
+            # Always show user ID
+            user_info_section = f"""
+<h3>User Info</h3>
+<p><b>User ID:</b> <span style="font-family: monospace; font-size: small;">{user_id}</span></p>
+"""
+            # Only show roles if user has any
+            if user_roles:
+                roles_list = ", ".join(f"<b>{role}</b>" for role in user_roles)
+                user_info_section += f"<p><b>Roles:</b> {roles_list}</p>\n"
+
         about_text = f"""
 <h2>ModScan Tool</h2>
 <p><b>Version:</b> {self.app_version}</p>
@@ -462,7 +492,7 @@ class ModbusScannerGUI(QMainWindow):
 <li><b>PyQt6:</b> {pyqt_version}</li>
 <li><b>Python:</b> {sys.version.split()[0]}</li>
 </ul>
-
+{user_info_section}
 <h3>Links</h3>
 <p>🔗 <a href="https://github.com/NathanMoore4472/modscan-tool">GitHub Repository</a></p>
 <p>🐛 <a href="https://github.com/NathanMoore4472/modscan-tool/issues">Report Issues</a></p>
@@ -537,6 +567,31 @@ Built with Python, PyQt6, and pymodbus
         info_label.setStyleSheet("color: #666; padding: 5px;")
         privacy_layout.addWidget(info_label)
 
+        # Development builds only: Show UUID and reset button
+        is_dev_build = not getattr(sys, 'frozen', False)
+        if is_dev_build:
+            # Add separator
+            privacy_layout.addSpacing(10)
+
+            # UUID display
+            user_id = self.settings.value("telemetry_user_id", None)
+            uuid_label = QLabel(f"<small><b>User ID:</b> {user_id or 'Not set'}</small>")
+            uuid_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            uuid_label.setStyleSheet("color: #666; padding: 5px; font-family: monospace;")
+            privacy_layout.addWidget(uuid_label)
+
+            # Reset UUID button
+            reset_uuid_btn = QPushButton("Reset User ID")
+            reset_uuid_btn.setToolTip("Generate a new anonymous user ID (development only)")
+            reset_uuid_btn.setMaximumWidth(150)
+            reset_uuid_btn.clicked.connect(lambda: self.reset_user_uuid(uuid_label))
+            privacy_layout.addWidget(reset_uuid_btn)
+
+            # Dev build indicator
+            dev_indicator = QLabel("<small><i>⚙️ Development build features enabled</i></small>")
+            dev_indicator.setStyleSheet("color: #999; padding: 5px;")
+            privacy_layout.addWidget(dev_indicator)
+
         privacy_group.setLayout(privacy_layout)
         layout.addWidget(privacy_group)
 
@@ -569,6 +624,49 @@ Built with Python, PyQt6, and pymodbus
             # Update telemetry client if it exists
             if hasattr(self, 'telemetry') and self.telemetry:
                 self.telemetry.telemetry_enabled = telemetry_cb.isChecked()
+
+    def reset_user_uuid(self, uuid_label):
+        """Reset the telemetry user UUID (development builds only)"""
+        # Ask for confirmation
+        reply = QMessageBox.question(
+            self,
+            "Reset User ID",
+            "Are you sure you want to reset your user ID?\n\n"
+            "This will generate a new anonymous ID and you will appear as a new user in analytics.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Delete the old UUID
+            self.settings.remove("telemetry_user_id")
+
+            # Generate a new UUID
+            import uuid
+            new_uuid = str(uuid.uuid4())
+            self.settings.setValue("telemetry_user_id", new_uuid)
+
+            # Update the label
+            uuid_label.setText(f"<small><b>User ID:</b> {new_uuid}</small>")
+
+            # Update telemetry client if it exists
+            if hasattr(self, 'telemetry') and self.telemetry:
+                self.telemetry.user_id = new_uuid
+
+            # Clear the role cache so it fetches fresh on next check
+            try:
+                from analytics.backends import supabase
+                supabase._USER_ROLES_CACHE = None
+            except:
+                pass
+
+            # Show success message
+            QMessageBox.information(
+                self,
+                "User ID Reset",
+                f"Your user ID has been reset.\n\nNew ID: {new_uuid}\n\n"
+                "This change takes effect immediately."
+            )
 
     def log_message(self, message, tag):
         """Display a log message in the info label"""

@@ -17,29 +17,47 @@ from typing import Optional, Dict, Any
 
 
 def _is_developer_mode() -> bool:
-    """Check if debug mode should be enabled (TELEMETRY_DEBUG or developer user_id)"""
+    """
+    Check if debug mode should be enabled
+
+    Uses role-based system from backends (Supabase/PostgreSQL).
+    Debug mode is enabled if:
+    - TELEMETRY_DEBUG setting is True, OR
+    - User has 'developer' role, OR
+    - User has 'debug' role (for remote debugging)
+    """
     try:
         import analytics_config as config
 
-        # Check if explicitly enabled
-        if getattr(config, 'TELEMETRY_DEBUG', False):
-            return True
+        backend_type = getattr(config, "BACKEND_TYPE", "postgres")
 
-        # Check if user is a developer
-        developer_ids = getattr(config, 'DEVELOPER_USER_IDS', [])
-        if developer_ids:
+        if backend_type == "postgres":
+            # Import the backend's role checking function
+            from analytics.backends.postgres import (
+                _is_developer_mode as backend_is_dev_mode,
+            )
+
+            postgres_url = getattr(config, "POSTGRES_URL", None)
+            return backend_is_dev_mode(postgres_url)
+        else:
+            # For Supabase and other backends
             try:
-                from PyQt6.QtCore import QSettings
-                settings = QSettings("ModScanTool", "ModbusScannerGUI")
-                user_id = settings.value("telemetry_user_id", None)
-                if user_id and user_id in developer_ids:
-                    return True
-            except Exception:
-                pass
+                from analytics.backends.supabase import (
+                    _is_developer_mode as backend_is_dev_mode,
+                )
 
-        return False
+                return backend_is_dev_mode()
+            except ImportError:
+                # Fallback: check TELEMETRY_DEBUG setting
+                return getattr(config, "TELEMETRY_DEBUG", False)
     except ImportError:
-        return False
+        # Fallback: check TELEMETRY_DEBUG setting
+        try:
+            import analytics_config as config
+
+            return getattr(config, "TELEMETRY_DEBUG", False)
+        except ImportError:
+            return False
 
 
 def _debug_log(message: str):
@@ -50,7 +68,7 @@ def _debug_log(message: str):
 
         # Write to Desktop for easy access
         log_file = Path.home() / "Desktop" / "modscan_telemetry_debug.log"
-        with open(log_file, 'a') as f:
+        with open(log_file, "a") as f:
             timestamp = datetime.now().isoformat()
             f.write(f"[{timestamp}] {message}\n")
     except Exception:
@@ -158,7 +176,9 @@ class TelemetryClient:
 
         # Collect data
         data = self._collect_data()
-        _debug_log(f"Collected data: app_version={data.get('app_version')}, os={data.get('os')}")
+        _debug_log(
+            f"Collected data: app_version={data.get('app_version')}, os={data.get('os')}"
+        )
 
         # Send in background or blocking
         if background:
@@ -173,7 +193,9 @@ class TelemetryClient:
         """Send data to backend (internal method)"""
         _debug_log("_send_data called")
         try:
-            _debug_log(f"Calling backend.send() - backend type: {type(self.backend).__name__}")
+            _debug_log(
+                f"Calling backend.send() - backend type: {type(self.backend).__name__}"
+            )
             success = self.backend.send(data)
             _debug_log(f"backend.send() returned: {success}")
             if success:
@@ -211,30 +233,44 @@ def get_backend():
     Load and return configured backend from analytics_config.py
 
     Returns:
-        Backend instance (SupabaseBackend or HTTPBackend) or None if not configured
+        Backend instance (PostgresBackend, SupabaseBackend, or HTTPBackend) or None if not configured
     """
     _debug_log("get_backend() called")
     try:
         _debug_log("Attempting to import analytics_config")
         import analytics_config as config
+
         _debug_log(f"analytics_config imported successfully from: {config.__file__}")
 
         from .backends.supabase import SupabaseBackend
         from .backends.http import HTTPBackend
+        from .backends.postgres import PostgresBackend
 
-        backend_type = getattr(config, 'BACKEND_TYPE', 'supabase')
+        backend_type = getattr(config, "BACKEND_TYPE", "postgres")
         _debug_log(f"Backend type: {backend_type}")
 
-        if backend_type == 'supabase':
-            url = getattr(config, 'SUPABASE_URL', None)
-            key = getattr(config, 'SUPABASE_KEY', None)
-            _debug_log(f"Supabase URL configured: {bool(url)}, Key configured: {bool(key)}")
-            backend = SupabaseBackend(url, key)
-            _debug_log(f"SupabaseBackend created, is_configured: {backend.is_configured()}")
+        if backend_type == "postgres":
+            url = getattr(config, "POSTGRES_URL", None)
+            _debug_log(f"PostgreSQL URL configured: {bool(url)}")
+            backend = PostgresBackend(url)
+            _debug_log(
+                f"PostgresBackend created, is_configured: {backend.is_configured()}"
+            )
             return backend
-        elif backend_type == 'http':
-            endpoint = getattr(config, 'HTTP_ENDPOINT_URL', None)
-            api_key = getattr(config, 'HTTP_API_KEY', None)
+        elif backend_type == "supabase":
+            url = getattr(config, "SUPABASE_URL", None)
+            key = getattr(config, "SUPABASE_KEY", None)
+            _debug_log(
+                f"Supabase URL configured: {bool(url)}, Key configured: {bool(key)}"
+            )
+            backend = SupabaseBackend(url, key)
+            _debug_log(
+                f"SupabaseBackend created, is_configured: {backend.is_configured()}"
+            )
+            return backend
+        elif backend_type == "http":
+            endpoint = getattr(config, "HTTP_ENDPOINT_URL", None)
+            api_key = getattr(config, "HTTP_API_KEY", None)
             _debug_log(f"HTTP endpoint: {endpoint}")
             return HTTPBackend(endpoint, api_key)
         else:

@@ -374,6 +374,12 @@ class UpdateChecker:
             )
             note_label.setTextFormat(Qt.TextFormat.RichText)
             layout.addWidget(note_label)
+        else:
+            note_label = QLabel(
+                '<p style="color: #666;"><i>Note: Sometimes the automatic install fails, just press "Download & Install" again and it usually works.</i></p>'
+            )
+            note_label.setTextFormat(Qt.TextFormat.RichText)
+            layout.addWidget(note_label)
 
         # Checkbox for startup checks
         checkbox = QCheckBox("Check for updates on startup")
