@@ -87,6 +87,8 @@ jobs:
 
         # Create DMG for distribution
         mkdir -p "dist/dmg"
+        # Detach any stale mounted volume with this name before creating DMG
+        hdiutil detach "/Volumes/ModScan Tool" 2>/dev/null || true
         # Use ditto instead of cp - it handles .app bundles and symlinks better
         ditto "dist/ModScan Tool.app" "dist/dmg/ModScan Tool.app"
         hdiutil create -volname "ModScan Tool" -srcfolder "dist/dmg" -ov -format UDZO "dist/ModScan-Tool-macOS.dmg"
