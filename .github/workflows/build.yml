@@ -39,9 +39,10 @@ jobs:
     - name: Create analytics config
       run: |
         cat > analytics_config.py << 'EOF'
-        BACKEND_TYPE = 'supabase'
-        SUPABASE_URL = '${{ secrets.SUPABASE_URL }}'
-        SUPABASE_KEY = '${{ secrets.SUPABASE_KEY }}'
+        BACKEND_TYPE = 'postgres'
+        POSTGRES_URL = 'http://api.modscan-tool.mooresedge.co.uk'
+        SUPABASE_URL = None
+        SUPABASE_KEY = None
         HTTP_ENDPOINT_URL = None
         HTTP_API_KEY = None
         TELEMETRY_ENABLED_BY_DEFAULT = True
