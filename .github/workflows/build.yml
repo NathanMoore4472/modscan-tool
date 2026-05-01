@@ -46,7 +46,7 @@ jobs:
         HTTP_ENDPOINT_URL = None
         HTTP_API_KEY = None
         TELEMETRY_ENABLED_BY_DEFAULT = True
-        TELEMETRY_DEBUG = False
+        TELEMETRY_DEBUG = True
         EOF
       shell: bash
 
