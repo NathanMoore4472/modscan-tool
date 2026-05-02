@@ -36,19 +36,6 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller pillow certifi
 
-    - name: Create analytics config
-      run: |
-        cat > analytics_config.py << 'EOF'
-        BACKEND_TYPE = 'postgres'
-        POSTGRES_URL = 'http://api.modscan-tool.mooresedge.co.uk'
-        SUPABASE_URL = None
-        SUPABASE_KEY = None
-        HTTP_ENDPOINT_URL = None
-        HTTP_API_KEY = None
-        TELEMETRY_ENABLED_BY_DEFAULT = True
-        TELEMETRY_DEBUG = True
-        EOF
-      shell: bash
 
     - name: Build for macOS
       if: matrix.os == 'macos-latest'
