@@ -22,7 +22,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -53,18 +53,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
 
-    - name: Create analytics config
-      run: |
-        cat > analytics_config.py << 'EOF'
-        BACKEND_TYPE = 'supabase'
-        SUPABASE_URL = '${{ secrets.SUPABASE_URL }}'
-        SUPABASE_KEY = '${{ secrets.SUPABASE_KEY }}'
-        HTTP_ENDPOINT_URL = None
-        HTTP_API_KEY = None
-        TELEMETRY_ENABLED_BY_DEFAULT = True
-        TELEMETRY_DEBUG = False
-        EOF
-      shell: bash
 
     - name: Start Modbus test server
       run: |
@@ -98,7 +86,7 @@ jobs:
         python3 modbus_test_server.py --stop || true
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         file: ./coverage.xml
         flags: unittests

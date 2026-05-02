@@ -26,7 +26,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -161,7 +161,7 @@ jobs:
     # Upload macOS to release
     - name: Upload macOS Release
       if: github.event_name == 'release' && matrix.os == 'macos-latest'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/ModScan-Tool-macOS.dmg
       env:
@@ -170,7 +170,7 @@ jobs:
     # Upload Windows to release
     - name: Upload Windows Release
       if: github.event_name == 'release' && matrix.os == 'windows-latest'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/ModScan-Tool-Windows.zip
       env:
@@ -179,7 +179,7 @@ jobs:
     # Upload Linux to release
     - name: Upload Linux Release
       if: github.event_name == 'release' && matrix.os == 'ubuntu-latest'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/ModScan-Tool-Linux.tar.gz
       env:
