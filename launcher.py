@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 
 # Application version - single source of truth
-VERSION = "1.5.1"
+VERSION = "1.5.2"
 
 
 def resource_path(relative_path):

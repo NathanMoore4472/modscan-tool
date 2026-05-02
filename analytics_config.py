@@ -39,7 +39,7 @@ HTTP_API_KEY = None  # Optional API key for authentication
 TELEMETRY_ENABLED_BY_DEFAULT = True
 
 # Print telemetry events to console for debugging
-TELEMETRY_DEBUG = True
+TELEMETRY_DEBUG = False
 
 # Developer user IDs - automatically enable debug features for these users
 DEVELOPER_USER_IDS = [
